@@ -1,0 +1,2287 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>App de Cobros</title>
+<!-- VERSION_APP: v11 -->
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #f2f2f2;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+  }
+  .caja {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    width: 300px;
+  }
+  h2 {
+    margin-top: 0;
+    color: #1F4E78;
+    text-align: center;
+  }
+  input, select {
+    width: 100%;
+    padding: 10px;
+    margin: 8px 0;
+    box-sizing: border-box;
+    font-size: 15px;
+  }
+  button {
+    width: 100%;
+    padding: 10px;
+    background: #1F4E78;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 15px;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+  
+
+  .filtroAvance {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 10px;
+  }
+
+  .filtroAvance input {
+    margin: 0;
+    flex: 1;
+  }
+
+  .filtroAvance button {
+    width: auto;
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .tituloAvance {
+    font-weight: bold;
+    color: #1F4E78;
+    margin-top: 10px;
+    margin-bottom: 5px;
+  }
+
+  .tarjetaPareja {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #ddd;
+  }
+
+  .tarjetaPareja:first-child {
+    border-top: none;
+  }
+
+  .resumenEstados {
+    font-size: 12px;
+    color: #555;
+    margin-top: 4px;
+  }
+
+    .barraAcciones {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 10px 0 14px;
+  }
+
+  .accionPrincipal {
+    width: 100%;
+    min-height: 40px;
+    margin: 0;
+    padding: 8px 6px;
+    font-size: 13px;
+    font-weight: bold;
+    background: #1F4E78;
+  }
+
+  .accionAgregar {
+    background: #1a7a3a;
+  }
+
+  .accionLiberar {
+    background: #1565c0;
+  }
+
+  .accionUsuarios {
+    background: #6a1b9a;
+  }
+
+  @media (min-width: 460px) {
+    .barraAcciones {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .accionPrincipal {
+      font-size: 12px;
+    }
+  }
+
+ 
+  button:disabled {
+    background: #999;
+  }
+  .error {
+    color: #c00000;
+    font-size: 13px;
+    text-align: center;
+    min-height: 18px;
+  }
+  .oculto {
+    display: none !important;
+  }
+  body.modoApp {
+    display: block;
+    height: auto;
+    min-height: 100vh;
+  }
+  #pantallaPrincipal {
+    max-width: 500px;
+    margin: 0 auto;
+    padding: 12px;
+  }
+  .pestanas {
+    display: flex;
+    margin-bottom: 12px;
+  }
+  .botonPestana {
+    flex: 1;
+    background: #ccc;
+    color: #333;
+    padding: 12px 6px;
+    font-size: 14px;
+  }
+  .botonPestana.activa {
+    background: #1F4E78;
+    color: white;
+  }
+  .mensajeCentro {
+    text-align: center;
+    color: #777;
+    padding: 30px 0;
+  }
+  .tarjetaCliente {
+    background: white;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  }
+  .tarjetaCliente .nombre {
+    font-weight: bold;
+    color: #1F4E78;
+    font-size: 15px;
+  }
+  .tarjetaCliente .codigo {
+    font-size: 12px;
+    color: #888;
+  }
+  .tarjetaCliente .fila {
+    font-size: 13px;
+    margin-top: 3px;
+    color: #333;
+  }
+  .tarjetaCliente .etiqueta {
+    color: #777;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-top: 4px;
+    margin-right: 4px;
+  }
+.accionReporte {
+  background: #0f6b3a;
+}
+  .badgeFoto {
+    background: #d4edda;
+    color: #155724;
+  }
+  .badgePendiente {
+    background: #fff3cd;
+    color: #856404;
+  }
+  .botonActualizar {
+    width: auto;
+    padding: 8px 14px;
+    font-size: 13px;
+    margin-bottom: 10px;
+    background: #1F4E78;
+  }
+  .encabezadoApp {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: #555;
+  }
+  .botonCerrarSesion {
+    width: auto;
+    padding: 6px 10px;
+    font-size: 12px;
+    background: #c00000;
+  }
+  .botonVolver {
+    width: auto;
+    background: none;
+    color: #1F4E78;
+    padding: 6px 0;
+    text-align: left;
+    font-weight: bold;
+  }
+.accionUbicaciones {
+  background: #c05a00;
+}
+  .etiquetaCampo {
+    display: block;
+    font-size: 12px;
+    color: #555;
+    margin-top: 10px;
+    margin-bottom: 2px;
+  }
+  textarea {
+    width: 100%;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    padding: 8px;
+    box-sizing: border-box;
+  }
+  input:disabled {
+    background: #eee;
+    color: #555;
+  }
+  .botonLiberarUno {
+    width: auto;
+    padding: 6px 14px;
+    font-size: 13px;
+    margin-top: 8px;
+    background: #1F4E78;
+  }
+</style>
+</head>
+<body>
+
+<div class="caja">
+
+  <!-- PASO 1: usuario y contraseña -->
+  <div id="pasoUsuario">
+    <h2>Iniciar sesión</h2>
+    <input type="text" id="campoUsuario" placeholder="Usuario">
+    <input type="password" id="campoContrasena" placeholder="Contraseña">
+    <button onclick="intentarLogin()" id="botonLogin">Entrar</button>
+    <div class="error" id="errorLogin"></div>
+  </div>
+
+  <!-- PASO 2: elegir los dos inspectores (solo si aplica) -->
+  <div id="pasoInspector" class="oculto">
+    <h2>¿Quiénes van a cobrar?</h2>
+    <select id="listaInspector1"></select>
+    <select id="listaInspector2"></select>
+    <button onclick="confirmarInspector()">Continuar</button>
+    <div class="error" id="errorInspector"></div>
+  </div>
+
+  <!-- PASO 3: factura inicial -->
+  <div id="pasoFactura" class="oculto">
+    <h2>¿Con qué factura inician?</h2>
+    <input type="text" id="campoFacturaInicial" placeholder="Ej: F-1001">
+    <button onclick="confirmarFacturaInicial()">Continuar</button>
+    <div class="error" id="errorFactura"></div>
+  </div>
+
+</div>
+
+<!-- PANTALLA PRINCIPAL -->
+<div id="pantallaPrincipal" class="oculto">
+  <div class="encabezadoApp">
+    <span id="textoSesion"></span>
+    <button onclick="cerrarSesion()" class="botonCerrarSesion">Cerrar sesión</button>
+  </div>
+  <div style="text-align:right; font-size:10px; color:#aaa;">v10</div>
+  <div class="barraAcciones" id="barraAcciones">
+
+  <button
+    id="botonActualizarGeneral"
+    class="accionPrincipal"
+    onclick="actualizarPantallaPrincipal()"
+  >
+    ↻ Actualizar
+  </button>
+
+  <button
+    id="botonAgregarCliente"
+    class="accionPrincipal accionAgregar oculto"
+    onclick="abrirPantallaAgregar()"
+  >
+    + Agregar
+  </button>
+
+<button
+  id="botonUbicaciones"
+  class="accionPrincipal accionUbicaciones oculto"
+  onclick="abrirUbicaciones()"
+>
+  Ubicaciones
+</button>
+
+  <button
+    id="botonLiberarClientes"
+    class="accionPrincipal accionLiberar oculto"
+    onclick="abrirPantallaLiberar()"
+  >
+    Liberar
+  </button>
+
+  <button
+    id="botonGestionUsuarios"
+    class="accionPrincipal accionUsuarios oculto"
+    onclick="abrirPantallaUsuarios()"
+  >
+    Usuarios
+  </button>
+
+<button
+  id="botonReporteExcel"
+  class="accionPrincipal accionReporte oculto"
+  onclick="descargarReporteExcel()"
+>
+  Excel
+</button>
+
+</div>
+  
+  <div class="encabezadoApp" id="filaFactura">
+  <span id="textoFacturaActual"></span>
+  <button
+    onclick="cambiarFacturaInicial()"
+    class="botonCerrarSesion"
+    style="background:#1F4E78;"
+  >
+    Cambiar factura
+  </button>
+</div>
+
+<div id="pantallaUbicaciones" class="oculto">
+  <button onclick="cerrarUbicaciones()" class="botonVolver">
+    ← Volver a la lista
+  </button>
+
+  <div class="tarjetaCliente">
+    <div class="nombre">Ubicaciones de cobros</div>
+    <div class="fila" id="textoFechaUbicaciones"></div>
+  </div>
+
+  <div id="cargandoUbicaciones" class="mensajeCentro">
+    Cargando ubicaciones...
+  </div>
+
+  <div id="listaUbicaciones"></div>
+</div>
+
+<div class="tarjetaCliente" id="barraAvance">
+  <div class="fila">
+    <span class="etiqueta">Resumen del día:</span>
+    <span id="textoAvance">Cargando...</span>
+  </div>
+
+  <div class="resumenEstados">
+    <span class="etiqueta">Cobros totales:</span>
+    <span id="textoCobrosTotales">0</span>
+    ·
+    <span class="etiqueta">Parciales:</span>
+    <span id="textoCobrosParciales">0</span>
+    ·
+    <span class="etiqueta">Notificaciones:</span>
+    <span id="textoNotificaciones">0</span>
+  </div>
+
+  <div id="bloqueBuscarFecha" class="oculto">
+    <div class="filtroAvance">
+      <input type="date" id="campoFechaAvance">
+      <button onclick="consultarAvancePorFecha()">
+        Consultar fecha
+      </button>
+    </div>
+  </div>
+
+  <div id="desgloseParejas" class="oculto"></div>
+</div>
+
+  <div class="pestanas">
+    <button class="botonPestana activa" id="botonTabCobros" onclick="cambiarPestana('cobros')">Realizar Cobros</button>
+    <button class="botonPestana" id="botonTabAtrasados" onclick="cambiarPestana('atrasados')">+40 días sin cobro</button>
+  </div>
+
+  
+
+<div id="tabCobros">
+    <input type="text" id="campoBuscar" placeholder="Buscar por código o nombre..." oninput="filtrarClientes()">
+    <div id="cargandoCobros" class="mensajeCentro">Cargando clientes...</div>
+    <div id="listaClientes"></div>
+  </div>
+
+  <div id="tabAtrasados" class="oculto">
+    <div id="cargandoAtrasados" class="mensajeCentro oculto">Cargando...</div>
+    <div id="listaAtrasados"></div>
+  </div>
+</div>
+
+<!-- PANTALLA PARA LIBERAR CLIENTES -->
+<div id="pantallaLiberar" class="oculto">
+  <button onclick="cerrarLiberar()" class="botonVolver">← Volver a la lista</button>
+
+  <div class="tarjetaCliente">
+    <button onclick="liberarTodos()" class="botonActualizar">Liberar todos los no liberados</button>
+    <label class="etiquetaCampo">O liberar solo una clasificación</label>
+    <select id="selectClasificacionLiberar"></select>
+    <button onclick="liberarPorClasificacion()" class="botonActualizar">Liberar esta clasificación</button>
+  </div>
+
+  <div id="cargandoLiberar" class="mensajeCentro">Cargando...</div>
+  <div id="listaLiberar"></div>
+</div>
+
+<!-- PANTALLA PARA AGREGAR CLIENTE -->
+<div id="pantallaAgregar" class="oculto">
+  <button onclick="cerrarAgregar()" class="botonVolver">← Volver a la lista</button>
+
+  <div class="tarjetaCliente">
+    <label class="etiquetaCampo">Nombre del cliente (obligatorio)</label>
+    <input type="text" id="nuevoNombre">
+
+    <label class="etiquetaCampo">Dirección (obligatorio)</label>
+    <input type="text" id="nuevoDireccion">
+
+    <label class="etiquetaCampo">Clasificación (obligatorio, escribe una nueva o elige una existente)</label>
+    <input type="text" id="nuevoClasificacion" list="opcionesClasificacion" placeholder="Ej: Sonsonate Norte">
+    <datalist id="opcionesClasificacion"></datalist>
+
+    <label class="etiquetaCampo">Número de medidor (déjalo vacío si es cuota fija)</label>
+    <input type="text" id="nuevoMedidor">
+
+    <label class="etiquetaCampo">Lectura inicial (solo si tiene medidor)</label>
+    <input type="number" id="nuevoLecturaInicial" value="0">
+
+    <div class="error" id="errorAgregar"></div>
+    <button onclick="guardarClienteNuevo()" id="botonGuardarCliente">Guardar cliente</button>
+  </div>
+</div>
+
+<!-- PANTALLA DE USUARIOS (SOLO ADMINISTRADOR) -->
+<div id="pantallaUsuarios" class="oculto">
+  <button onclick="cerrarUsuarios()" class="botonVolver">← Volver a la lista</button>
+
+  <div class="tarjetaCliente">
+    <h2>Agregar usuario nuevo</h2>
+    <label class="etiquetaCampo">Usuario</label>
+    <input type="text" id="nuevoUsuarioLogin">
+    <label class="etiquetaCampo">Contraseña</label>
+    <input type="text" id="nuevoUsuarioContrasena">
+    <label class="etiquetaCampo">Rol</label>
+    <select id="nuevoUsuarioRol">
+      <option value="Cobrador">Cobrador</option>
+      <option value="Supervisor">Supervisor</option>
+      <option value="Contador">Contador</option>
+      <option value="Administrador">Administrador</option>
+    </select>
+    <label class="etiquetaCampo">Zona (vacío si es Administrador)</label>
+    <select id="nuevoUsuarioZona">
+      <option value="">-- Administrador, todas --</option>
+      <option value="Santa Ana">Santa Ana</option>
+      <option value="Ahuachapan">Ahuachapan</option>
+      <option value="Sonsonate">Sonsonate</option>
+    </select>
+    <div class="error" id="errorUsuarios"></div>
+    <button onclick="crearUsuarioNuevo()">Crear usuario</button>
+  </div>
+
+  <div id="cargandoUsuarios" class="mensajeCentro">Cargando usuarios...</div>
+  <div id="listaUsuarios"></div>
+</div>
+
+<!-- PANTALLA DE DETALLE / REGISTRO DE COBRO -->
+<div id="pantallaDetalle" class="oculto">
+  <button onclick="cerrarDetalle()" class="botonVolver">← Volver a la lista</button>
+
+  <div class="tarjetaCliente">
+    <div class="codigo" id="detCodigo"></div>
+    <div class="nombre" id="detNombre"></div>
+    <div class="fila" id="detDireccion"></div>
+    <div class="fila"><span class="etiqueta">Medidor:</span> <span id="detMedidor"></span></div>
+  </div>
+
+  <div class="tarjetaCliente">
+
+    <!-- Solo si el cliente tiene medidor -->
+    <div id="bloqueMedidor" class="oculto">
+      <label class="etiquetaCampo">Lectura anterior</label>
+      <input type="text" id="detLecturaAnterior" disabled>
+
+      <label class="etiquetaCampo">Lectura actual</label>
+      <input type="number" id="detLecturaActual" placeholder="Ingresa la lectura de hoy">
+
+      <div class="fila"><span class="etiqueta">Consumo:</span> <span id="detConsumo">0</span> kWh</div>
+      <div class="fila"><span class="etiqueta">Pendiente meses anteriores:</span> <span id="detPteAnterior">0</span> kWh</div>
+      <div class="fila"><span class="etiqueta">Consumo total:</span> <span id="detConsumoTotal">0</span> kWh</div>
+    </div>
+
+    <!-- Solo si el cliente NO tiene medidor (cuota fija) -->
+    <div id="bloqueSinMedidor" class="oculto">
+      <label class="etiquetaCampo">Monto a cobrar (cuota fija)</label>
+      <input type="number" step="0.01" id="detMontoFijo" placeholder="0.00">
+    </div>
+
+    <label class="etiquetaCampo">Total $ a cobrar</label>
+    <input type="text" id="detTotalCobrar" disabled>
+
+    <label class="etiquetaCampo">Estado</label>
+    <select id="detEstado" onchange="actualizarCamposPorEstado()">
+      <option value="">Selecciona...</option>
+      <option value="Cobro Total">Cobro Total</option>
+      <option value="Cobro Parcial">Cobro Parcial</option>
+      <option value="Notificacion">Notificación</option>
+    </select>
+
+    <!-- Si es parcial, cuánto sí se cobró -->
+    <div id="bloqueParcial" class="oculto">
+      <label class="etiquetaCampo">KW a cobrar</label>
+      <input type="number" step="0.01" id="detKwCobrado" placeholder="0.00">
+      <div class="fila"><span class="etiqueta">Quedará pendiente:</span> <span id="detKwPendienteNuevo">0</span></div>
+      <div class="fila"><span class="etiqueta">Monto a cobrar hoy:</span> <span id="detMontoParcial">$0.00</span></div>
+    </div>
+
+    <label class="etiquetaCampo">N° Factura</label>
+    <input type="text" id="detNumeroFactura" disabled>
+
+    <label class="etiquetaCampo">Observaciones (obligatorio)</label>
+    <textarea id="detObservaciones" rows="3" placeholder="Describe cómo quedó el cobro"></textarea>
+
+    <div id="bloqueFotoFactura" class="oculto">
+      <label class="etiquetaCampo">Foto de factura (obligatoria)</label>
+      <input type="file" id="detFotoFactura" accept="image/*" capture="environment">
+    </div>
+
+    <div id="bloqueFotoNotificacion" class="oculto">
+      <label class="etiquetaCampo">Foto de notificación (obligatoria)</label>
+      <input type="file" id="detFotoNotificacion" accept="image/*" capture="environment">
+    </div>
+
+    <div class="error" id="errorDetalle"></div>
+    <button onclick="guardarCobro()" id="botonGuardarCobro">Guardar cobro</button>
+  </div>
+</div>
+
+<script>
+// Reemplaza esto con la URL /exec de tu Apps Script
+const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyz97GBtEQNkvHxDJ58P63J00MM5HluTSv5xrcr-t0PdWL5tgT7HWQBu67QE9UxdZDn3A/exec";
+
+let sesion = {
+  usuario: null,
+  rol: null,
+  zona: null,
+  inspector1: null,
+  inspector2: null,
+  facturaActual: null
+};
+
+// Al abrir la página, si ya había una sesión guardada, entramos directo
+window.addEventListener("DOMContentLoaded", () => {
+  const guardada = localStorage.getItem("sesionApp");
+  if (guardada) {
+    sesion = JSON.parse(guardada);
+    mostrarPantallaPrincipal();
+  }
+});
+
+// Envía una petición a Apps Script.
+// Usamos text/plain para evitar que el navegador mande una petición
+// de verificación (preflight) que Apps Script no responde bien.
+async function llamarBackend(accion, datos) {
+  const cuerpo = Object.assign({ accion: accion }, datos);
+  const controlador = new AbortController();
+  const limite = setTimeout(() => controlador.abort(), 45000);
+
+  try {
+    const respuesta = await fetch(URL_APPS_SCRIPT, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(cuerpo),
+      signal: controlador.signal
+    });
+    return await respuesta.json();
+  } finally {
+    clearTimeout(limite);
+  }
+}
+
+function escaparHtml(valor) {
+  return String(valor ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+async function intentarLogin() {
+  const usuario = document.getElementById("campoUsuario").value.trim();
+  const contrasena = document.getElementById("campoContrasena").value.trim();
+  const boton = document.getElementById("botonLogin");
+  const errorDiv = document.getElementById("errorLogin");
+
+  errorDiv.textContent = "";
+
+  if (!usuario || !contrasena) {
+    errorDiv.textContent = "Completa usuario y contraseña";
+    return;
+  }
+
+  boton.disabled = true;
+  boton.textContent = "Verificando...";
+
+  try {
+    const resultado = await llamarBackend("login", {
+      usuario,
+      contrasena
+    });
+
+    if (!resultado.exito) {
+      errorDiv.textContent = resultado.mensaje || "Usuario o contraseña incorrectos";
+      boton.disabled = false;
+      boton.textContent = "Entrar";
+      return;
+    }
+
+    sesion.usuario = usuario;
+    sesion.rol = String(resultado.rol || "").trim();
+    sesion.zona = String(resultado.zona || "").trim();
+    sesion.inspector1 = null;
+    sesion.inspector2 = null;
+    sesion.facturaActual = null;
+
+    const rolesSinInspectorNiFactura = [
+      "Supervisor",
+      "Contador",
+      "Administrador"
+    ];
+
+    if (rolesSinInspectorNiFactura.includes(sesion.rol)) {
+      guardarSesionYContinuar();
+      return;
+    }
+
+    if (sesion.rol === "Cobrador") {
+      await cargarInspectores(sesion.zona);
+
+      document.getElementById("pasoUsuario").classList.add("oculto");
+      document.getElementById("pasoInspector").classList.remove("oculto");
+      return;
+    }
+
+    errorDiv.textContent = "El rol del usuario no está configurado correctamente.";
+    boton.disabled = false;
+    boton.textContent = "Entrar";
+
+  } catch (err) {
+    errorDiv.textContent = "No hay conexión. Intenta de nuevo cuando tengas señal.";
+    boton.disabled = false;
+    boton.textContent = "Entrar";
+  }
+}
+
+async function cargarInspectores(zona) {
+  const resultado = await llamarBackend("inspectores", { zona });
+  const select1 = document.getElementById("listaInspector1");
+  const select2 = document.getElementById("listaInspector2");
+  select1.innerHTML = "";
+  select2.innerHTML = "";
+
+  resultado.forEach(nombre => {
+    const opcion1 = document.createElement("option");
+    opcion1.value = nombre;
+    opcion1.textContent = nombre;
+    select1.appendChild(opcion1);
+
+    const opcion2 = document.createElement("option");
+    opcion2.value = nombre;
+    opcion2.textContent = nombre;
+    select2.appendChild(opcion2);
+  });
+
+  // Para que no queden los dos seleccionando el mismo nombre por defecto
+  if (resultado.length > 1) {
+    select2.selectedIndex = 1;
+  }
+}
+
+function confirmarInspector() {
+  const select1 = document.getElementById("listaInspector1");
+  const select2 = document.getElementById("listaInspector2");
+  const errorDiv = document.getElementById("errorInspector");
+
+  errorDiv.textContent = "";
+
+  if (!select1.value || !select2.value) {
+    errorDiv.textContent = "Selecciona los dos inspectores";
+    return;
+  }
+
+  if (select1.value === select2.value) {
+    errorDiv.textContent = "Inspector 1 e Inspector 2 no pueden ser el mismo";
+    return;
+  }
+
+  sesion.inspector1 = select1.value;
+  sesion.inspector2 = select2.value;
+
+  document.getElementById("pasoInspector").classList.add("oculto");
+  document.getElementById("pasoFactura").classList.remove("oculto");
+}
+
+async function confirmarFacturaInicial() {
+  const campo = document.getElementById("campoFacturaInicial");
+  const errorDiv = document.getElementById("errorFactura");
+  const valor = campo.value.trim();
+
+  if (!valor) {
+    errorDiv.textContent = "Ingresa con qué número de factura inician";
+    return;
+  }
+
+  errorDiv.textContent = "Verificando...";
+  try {
+    const chequeo = await llamarBackend("facturaYaUsada", { zona: sesion.zona, numero: valor });
+    if (chequeo.usada) {
+      errorDiv.textContent = "Esa factura ya fue usada, ingresa otra";
+      return;
+    }
+  } catch (err) {
+    errorDiv.textContent = "Sin conexión, no se pudo verificar. Intenta con señal.";
+    return;
+  }
+
+  errorDiv.textContent = "";
+  sesion.facturaActual = valor;
+  guardarSesionYContinuar();
+}
+
+function incrementarFactura(numeroStr) {
+  const coincidencia = String(numeroStr).match(/^(.*?)(\d+)$/);
+  if (!coincidencia) return numeroStr; // no tiene números al final, no se puede incrementar solo
+
+  const prefijo = coincidencia[1];
+  const numeroTexto = coincidencia[2];
+  const siguiente = (parseInt(numeroTexto, 10) + 1).toString().padStart(numeroTexto.length, "0");
+  return prefijo + siguiente;
+}
+
+async function cambiarFacturaInicial() {
+  const nuevo = prompt("Nuevo número de factura inicial:", sesion.facturaActual || "");
+  if (!nuevo || !nuevo.trim()) return;
+
+  try {
+    const chequeo = await llamarBackend("facturaYaUsada", { zona: sesion.zona, numero: nuevo.trim() });
+    if (chequeo.usada) {
+      alert("Esa factura ya fue usada, ingresa otra");
+      return;
+    }
+  } catch (err) {
+    alert("Sin conexión, no se pudo verificar. Intenta con señal.");
+    return;
+  }
+
+  sesion.facturaActual = nuevo.trim();
+  localStorage.setItem("sesionApp", JSON.stringify(sesion));
+  actualizarTextoFactura();
+}
+
+function actualizarTextoFactura() {
+  const el = document.getElementById("textoFacturaActual");
+  if (el) el.textContent = "Próxima factura: " + (sesion.facturaActual || "-");
+}
+
+function guardarSesionYContinuar() {
+  // Guardamos la sesión en el navegador para que funcione offline
+  localStorage.setItem("sesionApp", JSON.stringify(sesion));
+  mostrarPantallaPrincipal();
+}
+
+function mostrarPantallaPrincipal() {
+  document.body.classList.add("modoApp");
+
+  document.getElementById("pasoUsuario")
+    .parentElement
+    .classList
+    .add("oculto");
+
+  document.getElementById("pantallaPrincipal")
+    .classList
+    .remove("oculto");
+
+  const esCobrador = sesion.rol === "Cobrador";
+  const esContador = sesion.rol === "Contador";
+  const esSupervisor = sesion.rol === "Supervisor";
+  const esAdministrador = sesion.rol === "Administrador";
+
+  const puedeConsultarFecha =
+    esContador || esSupervisor || esAdministrador;
+
+const puedeDescargarReporte =
+  esContador || esAdministrador;
+
+document.getElementById("botonReporteExcel")
+  .classList
+  .toggle("oculto", !puedeDescargarReporte);
+
+  const puedeVerDesgloseParejas =
+    esSupervisor || esAdministrador;
+
+  const puedeLiberar =
+    esSupervisor || esAdministrador;
+
+  const nombres = esCobrador && sesion.inspector1
+    ? sesion.inspector1 + " / " + sesion.inspector2
+    : sesion.usuario + " · " + sesion.rol;
+
+  document.getElementById("textoSesion").textContent =
+    nombres + " · " + (sesion.zona || "Todas las zonas");
+
+document.getElementById("botonUbicaciones")
+  .classList
+  .toggle(
+    "oculto",
+    !(esSupervisor || esAdministrador)
+  );
+
+  document.getElementById("filaFactura")
+    .classList
+    .toggle("oculto", !esCobrador);
+
+  document.getElementById("bloqueBuscarFecha")
+    .classList
+    .toggle("oculto", !puedeConsultarFecha);
+
+  document.getElementById("desgloseParejas")
+    .classList
+    .toggle("oculto", !puedeVerDesgloseParejas);
+
+  document.getElementById("botonAgregarCliente")
+    .classList
+    .toggle("oculto", !esAdministrador);
+
+  document.getElementById("botonLiberarClientes")
+    .classList
+    .toggle("oculto", !puedeLiberar);
+
+  document.getElementById("botonGestionUsuarios")
+    .classList
+    .toggle("oculto", !esAdministrador);
+
+  actualizarTextoFactura();
+  inicializarFechaAvance();
+  actualizarPantallaPrincipal();
+}
+
+
+function obtenerFechaLocalISO(fecha = new Date()) {
+  const compensacion = fecha.getTimezoneOffset() * 60000;
+  return new Date(fecha.getTime() - compensacion)
+    .toISOString()
+    .slice(0, 10);
+}
+
+function inicializarFechaAvance() {
+  const campoFecha = document.getElementById("campoFechaAvance");
+
+  if (!campoFecha.value) {
+    campoFecha.value = obtenerFechaLocalISO();
+  }
+}
+
+function actualizarPantallaPrincipal() {
+  cargarClientesParaCobro();
+  cargarAvanceDelDia();
+}
+
+function consultarAvancePorFecha() {
+  const fecha = document.getElementById("campoFechaAvance").value;
+
+  if (!fecha) {
+    alert("Selecciona una fecha para consultar.");
+    return;
+  }
+
+  cargarAvanceDelDia(fecha);
+}
+
+async function cargarAvanceDelDia(fechaSeleccionada = null) {
+  const esCobrador = sesion.rol === "Cobrador";
+  const esContador = sesion.rol === "Contador";
+  const esSupervisor = sesion.rol === "Supervisor";
+  const esAdministrador = sesion.rol === "Administrador";
+
+  const puedeConsultarFecha =
+    esContador || esSupervisor || esAdministrador;
+
+  const puedeVerDesgloseParejas =
+    esSupervisor || esAdministrador;
+
+  const fechaConsulta = fechaSeleccionada ||
+    (puedeConsultarFecha
+      ? document.getElementById("campoFechaAvance").value
+      : obtenerFechaLocalISO());
+
+  const parejaActual = esCobrador && sesion.inspector1
+    ? sesion.inspector1 + " / " + sesion.inspector2
+    : "";
+
+  try {
+    const avance = await llamarBackend("avanceDelDia", {
+      zona: sesion.zona || "",
+      fecha: fechaConsulta,
+      pareja: parejaActual
+    });
+
+    if (avance.exito === false) {
+      throw new Error(avance.mensaje || "El servidor no pudo obtener el avance.");
+    }
+
+    const totalClientes = Number(avance.clientesCobrados) || 0;
+const montoTotal = Number(avance.montoTotal) || 0;
+const kwTotalCobrados = Number(avance.kwTotalCobrados) || 0;
+const porEstado = avance.porEstado || {};
+
+    document.getElementById("textoAvance").textContent =
+  totalClientes + " clientes · " +
+  kwTotalCobrados.toFixed(2) + " kWh cobrados · $" +
+  montoTotal.toFixed(2);
+
+    document.getElementById("textoCobrosTotales").textContent =
+      Number(porEstado["Cobro Total"]) || 0;
+
+    document.getElementById("textoCobrosParciales").textContent =
+      Number(porEstado["Cobro Parcial"]) || 0;
+
+    document.getElementById("textoNotificaciones").textContent =
+      Number(porEstado["Notificacion"]) || 0;
+
+    const contenedor = document.getElementById("desgloseParejas");
+
+    if (!puedeVerDesgloseParejas) {
+      contenedor.innerHTML = "";
+      return;
+    }
+
+    const desglose = avance.desglose || [];
+
+    if (desglose.length === 0) {
+      contenedor.innerHTML =
+        '<div class="mensajeCentro">No hay cobros registrados para esta fecha.</div>';
+      return;
+    }
+
+    contenedor.innerHTML =
+      '<div class="tituloAvance">Desglose por inspectores</div>' +
+      desglose.map(item => `
+        <div class="tarjetaPareja">
+          <div class="fila">
+            <span class="etiqueta">Inspectores:</span>
+            ${escaparHtml(item.pareja)}
+          </div>
+
+          <div class="fila">
+            <span class="etiqueta">Clientes:</span>
+${item.clientes}
+·
+<span class="etiqueta">kWh:</span>
+${Number(item.kwCobrados || 0).toFixed(2)}
+·
+<span class="etiqueta">Monto:</span>
+$${Number(item.monto).toFixed(2)}
+          </div>
+
+          <div class="fila">
+            <span class="etiqueta">Inicio:</span>
+            ${item.horaInicio || "-"}
+            ·
+            <span class="etiqueta">Fin:</span>
+            ${item.horaFin || "-"}
+          </div>
+
+          <div class="resumenEstados">
+            Cobros totales: ${item.cobrosTotales || 0}
+            · Parciales: ${item.cobrosParciales || 0}
+            · Notificaciones: ${item.notificaciones || 0}
+          </div>
+        </div>
+      `).join("");
+
+  } catch (err) {
+    console.error("Error al consultar avance:", err);
+
+    document.getElementById("textoAvance").textContent =
+      "Error al consultar avance";
+
+    document.getElementById("textoCobrosTotales").textContent = "0";
+    document.getElementById("textoCobrosParciales").textContent = "0";
+    document.getElementById("textoNotificaciones").textContent = "0";
+
+    const contenedor = document.getElementById("desgloseParejas");
+
+    if (puedeVerDesgloseParejas) {
+      contenedor.innerHTML =
+        '<div class="mensajeCentro">' +
+        escaparHtml(err.message || "No se pudo consultar el avance.") +
+        "</div>";
+    }
+  }
+}
+
+function cerrarSesion() {
+  const confirmar = confirm("¿Seguro que quieres cerrar sesión?");
+  if (!confirmar) return;
+
+  localStorage.removeItem("sesionApp");
+  sesion = { usuario: null, rol: null, zona: null, inspector1: null, inspector2: null };
+  location.reload();
+}
+
+let atrasadosCargados = false;
+
+function cambiarPestana(nombre) {
+  const esCobros = nombre === "cobros";
+  document.getElementById("tabCobros").classList.toggle("oculto", !esCobros);
+  document.getElementById("tabAtrasados").classList.toggle("oculto", esCobros);
+  document.getElementById("botonTabCobros").classList.toggle("activa", esCobros);
+  document.getElementById("botonTabAtrasados").classList.toggle("activa", !esCobros);
+
+  if (!esCobros && !atrasadosCargados) {
+    cargarClientesAtrasados();
+  }
+}
+
+async function cargarClientesAtrasados() {
+  const cargando = document.getElementById("cargandoAtrasados");
+  const contenedor = document.getElementById("listaAtrasados");
+  cargando.classList.remove("oculto");
+
+  try {
+    let clientes = [];
+    if (sesion.rol === "Administrador") {
+      for (const z of ["Santa Ana", "Ahuachapan", "Sonsonate"]) {
+        clientes = clientes.concat(await llamarBackend("clientesAtrasados", { zona: z }));
+      }
+    } else {
+      clientes = await llamarBackend("clientesAtrasados", { zona: sesion.zona });
+    }
+
+    atrasadosCargados = true;
+    clientes.sort((a, b) => b["Dias Sin Cobro"] - a["Dias Sin Cobro"]);
+
+    contenedor.innerHTML = "";
+    if (clientes.length === 0) {
+      contenedor.innerHTML = '<div class="mensajeCentro">No hay clientes con más de 40 días sin cobro</div>';
+    } else {
+      clientes.forEach(c => {
+        const tarjeta = document.createElement("div");
+        tarjeta.className = "tarjetaCliente";
+        tarjeta.innerHTML = `
+  <div class="codigo">${c["CODIGO"]}</div>
+  <div class="nombre">${c["Nombre Cliente"]}</div>
+  <div class="fila">${c["DIRECCION"]}</div>
+  <div class="fila">
+    <span class="badge badgePendiente">
+      ${c["Dias Sin Cobro"] === 9999
+        ? "Nunca se le ha cobrado"
+        : c["Dias Sin Cobro"] + " días sin cobro"}
+    </span>
+    <span class="badge badgePendiente">
+      ${c["Texto Meses Sin Pagar"]}
+    </span>
+  </div>
+`;
+        tarjeta.addEventListener("click", () => abrirDetalleCliente(c));
+        contenedor.appendChild(tarjeta);
+      });
+    }
+  } catch (err) {
+    contenedor.innerHTML = '<div class="mensajeCentro">Sin conexión, intenta con señal</div>';
+  }
+
+  cargando.classList.add("oculto");
+}
+
+async function abrirPantallaAgregar() {
+  document.getElementById("pantallaPrincipal").classList.add("oculto");
+  document.getElementById("pantallaAgregar").classList.remove("oculto");
+  document.getElementById("nuevoNombre").value = "";
+  document.getElementById("nuevoDireccion").value = "";
+  document.getElementById("nuevoMedidor").value = "";
+  document.getElementById("nuevoLecturaInicial").value = "0";
+  document.getElementById("errorAgregar").textContent = "";
+
+  const select = document.getElementById("opcionesClasificacion");
+  select.innerHTML = "";
+  document.getElementById("nuevoClasificacion").value = "";
+  try {
+    const clasificaciones = await llamarBackend("clasificacionesPorZona", { zona: sesion.zona });
+    clasificaciones.forEach(c => {
+      const opcion = document.createElement("option");
+      opcion.value = c;
+      select.appendChild(opcion);
+    });
+  } catch (err) { /* si falla, se deja vacío y puede escribir libre */ }
+}
+
+function cerrarAgregar() {
+  document.getElementById("pantallaAgregar").classList.add("oculto");
+  document.getElementById("pantallaPrincipal").classList.remove("oculto");
+}
+
+
+
+async function guardarClienteNuevo() {
+  const errorDiv = document.getElementById("errorAgregar");
+  const nombre = document.getElementById("nuevoNombre").value.trim();
+  const direccion = document.getElementById("nuevoDireccion").value.trim();
+  const clasificacion = document.getElementById("nuevoClasificacion").value;
+  const medidor = document.getElementById("nuevoMedidor").value.trim();
+  const lecturaInicial = document.getElementById("nuevoLecturaInicial").value;
+
+  errorDiv.textContent = "";
+  if (!nombre) { errorDiv.textContent = "Falta el nombre"; return; }
+  if (!direccion) { errorDiv.textContent = "Falta la dirección"; return; }
+  if (!clasificacion) { errorDiv.textContent = "Falta la clasificación"; return; }
+
+  const boton = document.getElementById("botonGuardarCliente");
+  boton.disabled = true;
+  boton.textContent = "Guardando...";
+
+  try {
+    const resultado = await llamarBackend("agregarCliente", {
+      nombreCliente: nombre,
+      direccion: direccion,
+      zona: sesion.zona,
+      clasificacion: clasificacion,
+      medidor: medidor,
+      lecturaInicial: lecturaInicial,
+      usuario: sesion.usuario
+    });
+
+    if (resultado.exito) {
+      alert("Cliente agregado con código: " + resultado.codigo);
+      cerrarAgregar();
+      cargarClientesParaCobro();
+    } else {
+      errorDiv.textContent = resultado.mensaje || "No se pudo guardar";
+    }
+  } catch (err) {
+    errorDiv.textContent = "Sin conexión, intenta con señal";
+  }
+
+  boton.disabled = false;
+  boton.textContent = "Guardar cliente";
+}
+
+async function liberarUnCliente(codigo, tarjeta) {
+  try {
+    const resultado = await llamarBackend("liberarCliente", {
+      codigo: codigo,
+      usuario: sesion.usuario
+    });
+
+    if (resultado.exito) {
+      tarjeta.remove();
+    } else {
+      alert(resultado.mensaje || "No se pudo liberar");
+    }
+  } catch (err) {
+    alert("Sin conexión, intenta con señal");
+  }
+}
+
+async function liberarTodos() {
+  if (!confirm("¿Liberar a TODOS los clientes no liberados de tu zona?")) return;
+
+  const zonas = sesion.rol === "Administrador"
+    ? ["Santa Ana", "Ahuachapan", "Sonsonate"]
+    : [sesion.zona];
+
+  let total = 0;
+
+  for (const z of zonas) {
+    const resultado = await llamarBackend("liberarBloque", {
+      zona: z,
+      clasificacion: null,
+      usuario: sesion.usuario
+    });
+
+    if (resultado.exito) total += resultado.cantidad;
+  }
+
+  alert(total + " clientes liberados");
+  cargarClientesNoLiberados();
+}
+
+async function liberarPorClasificacion() {
+  const clasificacion = document.getElementById("selectClasificacionLiberar").value;
+
+  if (!clasificacion) {
+    alert("Selecciona una clasificación");
+    return;
+  }
+
+  if (!confirm('¿Liberar a los no liberados de "' + clasificacion + '"?')) return;
+
+  const resultado = await llamarBackend("liberarBloque", {
+    zona: sesion.zona,
+    clasificacion: clasificacion,
+    usuario: sesion.usuario
+  });
+
+  alert(resultado.cantidad + " clientes liberados");
+  cargarClientesNoLiberados();
+}
+
+async function crearUsuarioNuevo() {
+  const errorDiv = document.getElementById("errorUsuarios");
+  const usuario = document.getElementById("nuevoUsuarioLogin").value.trim();
+  const contrasena = document.getElementById("nuevoUsuarioContrasena").value.trim();
+  const rol = document.getElementById("nuevoUsuarioRol").value;
+  const zona = document.getElementById("nuevoUsuarioZona").value;
+
+  errorDiv.textContent = "";
+
+  if (!usuario || !contrasena) {
+    errorDiv.textContent = "Usuario y contraseña son obligatorios";
+    return;
+  }
+
+  if (rol !== "Administrador" && !zona) {
+    errorDiv.textContent = "Selecciona la zona (solo Administrador puede quedar sin zona)";
+    return;
+  }
+
+  try {
+    const resultado = await llamarBackend("agregarUsuario", {
+      usuario: usuario,
+      contrasena: contrasena,
+      rol: rol,
+      zona: zona,
+      usuarioSolicitante: sesion.usuario
+    });
+
+    if (resultado.exito) {
+      alert("Usuario creado");
+      document.getElementById("nuevoUsuarioLogin").value = "";
+      document.getElementById("nuevoUsuarioContrasena").value = "";
+      cargarListaUsuarios();
+    } else {
+      errorDiv.textContent = resultado.mensaje || "No se pudo crear";
+    }
+  } catch (err) {
+    errorDiv.textContent = "Sin conexión, intenta con señal";
+  }
+}
+
+
+async function cambiarContrasenaDesdeApp(usuario) {
+  const nueva = prompt("Nueva contraseña para " + usuario + ":");
+
+  if (!nueva || !nueva.trim()) return;
+
+  try {
+    const resultado = await llamarBackend("cambiarContrasenaUsuario", {
+      usuario: usuario,
+      nuevaContrasena: nueva.trim(),
+      usuarioSolicitante: sesion.usuario
+    });
+
+    alert(
+      resultado.exito
+        ? "Contraseña actualizada"
+        : (resultado.mensaje || "No se pudo actualizar")
+    );
+  } catch (err) {
+    alert("Sin conexión, intenta con señal");
+  }
+}
+
+async function abrirPantallaUsuarios() {
+  if (sesion.rol !== "Administrador") return;
+  document.getElementById("pantallaPrincipal").classList.add("oculto");
+  document.getElementById("pantallaUsuarios").classList.remove("oculto");
+  document.getElementById("nuevoUsuarioLogin").value = "";
+  document.getElementById("nuevoUsuarioContrasena").value = "";
+  document.getElementById("errorUsuarios").textContent = "";
+  cargarListaUsuarios();
+}
+
+function cerrarUsuarios() {
+  document.getElementById("pantallaUsuarios").classList.add("oculto");
+  document.getElementById("pantallaPrincipal").classList.remove("oculto");
+}
+
+async function cargarListaUsuarios() {
+  const cargando = document.getElementById("cargandoUsuarios");
+  const contenedor = document.getElementById("listaUsuarios");
+  cargando.classList.remove("oculto");
+  contenedor.innerHTML = "";
+
+  try {
+    const respuesta = await llamarBackend("obtenerUsuarios", {
+  usuarioSolicitante: sesion.usuario
+});
+
+if (!respuesta.exito) {
+  throw new Error(
+    respuesta.mensaje || "No se pudieron obtener los usuarios."
+  );
+}
+
+const usuarios = respuesta.usuarios || [];
+    usuarios.forEach(u => {
+      const tarjeta = document.createElement("div");
+      tarjeta.className = "tarjetaCliente";
+      tarjeta.innerHTML = `
+        <div class="nombre">${u.usuario}</div>
+        <div class="fila"><span class="etiqueta">Rol:</span> ${u.rol} <span class="etiqueta">· Zona:</span> ${u.zona || "Todas"}</div>
+        <button class="botonLiberarUno">Cambiar contraseña</button>
+      `;
+      tarjeta.querySelector(".botonLiberarUno").addEventListener("click", () => cambiarContrasenaDesdeApp(u.usuario));
+      contenedor.appendChild(tarjeta);
+    });
+  } catch (err) {
+    contenedor.innerHTML = '<div class="mensajeCentro">Sin conexión, intenta con señal</div>';
+  }
+
+  cargando.classList.add("oculto");
+}
+
+
+
+
+
+function abrirPantallaLiberar() {
+  const puedeLiberar = [
+    "Supervisor",
+    "Administrador"
+  ].includes(sesion.rol);
+
+  if (!puedeLiberar) {
+    alert("Tu rol no tiene permiso para liberar clientes.");
+    return;
+  }
+  document.getElementById("pantallaPrincipal").classList.add("oculto");
+  document.getElementById("pantallaLiberar").classList.remove("oculto");
+  cargarClientesNoLiberados();
+}
+
+function cerrarLiberar() {
+  document.getElementById("pantallaLiberar").classList.add("oculto");
+  document.getElementById("pantallaPrincipal").classList.remove("oculto");
+}
+
+async function cargarClientesNoLiberados() {
+  const cargando = document.getElementById("cargandoLiberar");
+  const contenedor = document.getElementById("listaLiberar");
+  cargando.classList.remove("oculto");
+  contenedor.innerHTML = "";
+
+  if (sesion.rol !== "Administrador") {
+    const selectClas = document.getElementById("selectClasificacionLiberar");
+    try {
+      const clasificaciones = await llamarBackend("clasificacionesPorZona", { zona: sesion.zona });
+      selectClas.innerHTML = "";
+      clasificaciones.forEach(c => {
+        const opcion = document.createElement("option");
+        opcion.value = c;
+        opcion.textContent = c;
+        selectClas.appendChild(opcion);
+      });
+    } catch (err) { /* si falla, se deja el select vacío */ }
+  }
+
+  try {
+    let clientes = [];
+    if (sesion.rol === "Administrador") {
+      for (const z of ["Santa Ana", "Ahuachapan", "Sonsonate"]) {
+        clientes = clientes.concat(await llamarBackend("clientesNoLiberados", { zona: z }));
+      }
+    } else {
+      clientes = await llamarBackend("clientesNoLiberados", { zona: sesion.zona });
+    }
+
+    if (clientes.length === 0) {
+      contenedor.innerHTML = '<div class="mensajeCentro">Todos los clientes ya están liberados</div>';
+    } else {
+      clientes.forEach(c => {
+        const tarjeta = document.createElement("div");
+        tarjeta.className = "tarjetaCliente";
+        tarjeta.innerHTML = `
+          <div class="codigo">${c["CODIGO"]}</div>
+          <div class="nombre">${c["Nombre Cliente"]}</div>
+          <div class="fila"><span class="etiqueta">Estado del último cobro:</span> ${c["Estado"] || "-"}</div>
+          <button class="botonLiberarUno">Liberar</button>
+        `;
+        tarjeta.querySelector(".botonLiberarUno").addEventListener("click", () => liberarUnCliente(c["CODIGO"], tarjeta));
+        contenedor.appendChild(tarjeta);
+      });
+    }
+  } catch (err) {
+    contenedor.innerHTML = '<div class="mensajeCentro">Sin conexión, intenta con señal</div>';
+  }
+
+  cargando.classList.add("oculto");
+}
+
+
+
+
+
+
+
+async function cargarClientesParaCobro() {
+  const contenedor = document.getElementById("listaClientes");
+  const cargando = document.getElementById("cargandoCobros");
+
+  cargando.classList.remove("oculto");
+  contenedor.innerHTML = "";
+
+  try {
+    let clientes = [];
+
+    if (sesion.rol === "Administrador") {
+      const zonas = [
+        "Santa Ana",
+        "Ahuachapan",
+        "Sonsonate"
+      ];
+
+      for (const z of zonas) {
+        const resultado = await llamarBackend(
+          "clientesParaCobro",
+          { zona: z }
+        );
+
+        if (!Array.isArray(resultado)) {
+          throw new Error(
+            resultado?.mensaje ||
+            "El servidor no devolvió una lista válida de clientes para " + z + "."
+          );
+        }
+
+        clientes = clientes.concat(resultado);
+      }
+
+    } else {
+      const resultado = await llamarBackend(
+        "clientesParaCobro",
+        { zona: sesion.zona }
+      );
+
+      if (!Array.isArray(resultado)) {
+        throw new Error(
+          resultado?.mensaje ||
+          "El servidor no devolvió una lista válida de clientes."
+        );
+      }
+
+      clientes = resultado;
+    }
+
+    localStorage.setItem(
+      "clientesParaCobro",
+      JSON.stringify(clientes)
+    );
+
+    pintarListaClientes(clientes);
+
+  } catch (err) {
+    console.error("Error al cargar clientes:", err);
+
+    const guardado = localStorage.getItem(
+      "clientesParaCobro"
+    );
+
+    if (guardado) {
+      try {
+        const clientesGuardados = JSON.parse(guardado);
+
+        if (Array.isArray(clientesGuardados)) {
+          pintarListaClientes(clientesGuardados);
+        } else {
+          throw new Error("La copia local de clientes no es válida.");
+        }
+
+      } catch (errorLocal) {
+        contenedor.innerHTML =
+          '<div class="mensajeCentro">' +
+          escaparHtml(err.message || "No se pudieron cargar los clientes.") +
+          "</div>";
+      }
+
+    } else {
+      contenedor.innerHTML =
+        '<div class="mensajeCentro">' +
+        escaparHtml(err.message || "No se pudieron cargar los clientes.") +
+        "</div>";
+    }
+
+  } finally {
+    cargando.classList.add("oculto");
+  }
+}
+
+let clientesCargados = [];
+
+function pintarListaClientes(clientes) {
+  if (!Array.isArray(clientes)) {
+    console.error(
+      "Se intentó pintar una lista no válida:",
+      clientes
+    );
+
+    clientesCargados = [];
+
+    document.getElementById("listaClientes").innerHTML =
+      '<div class="mensajeCentro">' +
+      "La respuesta de clientes no tiene el formato esperado." +
+      "</div>";
+
+    return;
+  }
+
+  clientesCargados = clientes;
+  filtrarClientes();
+}
+
+async function desactivarClienteDesdeTarjeta(codigo, tarjeta) {
+  if (sesion.rol !== "Administrador") {
+    alert("Tu rol no tiene permiso para desactivar clientes.");
+    return;
+  }
+
+  const confirmar = confirm(
+    "¿Desactivar al cliente " + codigo + "?\n\n" +
+    "Ya no aparecerá para cobro, pero su historial se conservará."
+  );
+
+  if (!confirmar) return;
+
+  try {
+    const resultado = await llamarBackend("desactivarCliente", {
+      codigo: codigo,
+      usuario: sesion.usuario
+    });
+
+    if (!resultado.exito) {
+      alert(resultado.mensaje || "No se pudo desactivar el cliente.");
+      return;
+    }
+
+    tarjeta.remove();
+
+    alert(
+      resultado.mensaje ||
+      "Cliente desactivado correctamente."
+    );
+
+  } catch (err) {
+    console.error("Error al desactivar cliente:", err);
+    alert("No se pudo conectar para desactivar el cliente.");
+  }
+}
+
+function filtrarClientes() {
+  const texto = (
+    document.getElementById("campoBuscar").value || ""
+  ).trim().toLowerCase();
+
+  const contenedor = document.getElementById("listaClientes");
+
+  if (!Array.isArray(clientesCargados)) {
+    clientesCargados = [];
+  }
+
+  contenedor.innerHTML = "";
+
+  let clientes = clientesCargados;
+
+  if (texto) {
+    clientes = clientesCargados.filter(c => {
+      const codigo = String(c["CODIGO"]).toLowerCase();
+      const nombre = String(c["Nombre Cliente"]).toLowerCase();
+      return codigo.includes(texto) || nombre.includes(texto);
+    });
+  }
+
+  if (clientes.length === 0) {
+    contenedor.innerHTML = '<div class="mensajeCentro">No hay clientes que coincidan</div>';
+    return;
+  }
+
+  clientes.forEach(cliente => {
+    const tarjeta = document.createElement("div");
+    tarjeta.className = "tarjetaCliente";
+
+    const medidor = cliente["Medidor"] ? cliente["Medidor"] : "Sin medidor (cuota fija)";
+    const kwPendiente = Number(cliente["KW Pendiente"]) || 0;
+    const tieneFotoFactura = !!cliente["Foto Factura"];
+    const tieneFotoNotificacion = !!cliente["Foto Notificacion"];
+    const fechaUltimo = cliente["Fecha Ultimo Cobro"] || "Sin cobros anteriores";
+
+    let badges = "";
+    if (kwPendiente > 0) {
+      badges += `<span class="badge badgePendiente">KW pendiente: ${kwPendiente}</span>`;
+    }
+    if (tieneFotoFactura) {
+      badges += `<span class="badge badgeFoto">Foto factura</span>`;
+    }
+    if (tieneFotoNotificacion) {
+      badges += `<span class="badge badgeFoto">Foto notificación</span>`;
+    }
+
+    tarjeta.innerHTML = `
+      <div class="codigo">${cliente["CODIGO"]}</div>
+      <div class="nombre">${cliente["Nombre Cliente"]}</div>
+      <div class="fila"><span class="etiqueta">Medidor:</span> ${medidor}</div>
+      <div class="fila"><span class="etiqueta">Lectura anterior:</span> ${cliente["Lectura Anterior"]}</div>
+      <div class="fila"><span class="etiqueta">Observación:</span> ${cliente["OBSERVACIONES"] || "-"}</div>
+      <div class="fila"><span class="etiqueta">Último cobro:</span> ${fechaUltimo}</div>
+      <div>${badges}</div>
+    `;
+
+    if (sesion.rol === "Administrador") {
+      const botonEliminar = document.createElement("button");
+      botonEliminar.textContent = "Desactivar";
+      botonEliminar.className = "botonLiberarUno";
+      botonEliminar.style.background = "#c00000";
+      botonEliminar.addEventListener("click", (e) => {
+        e.stopPropagation();
+        desactivarClienteDesdeTarjeta(cliente["CODIGO"], tarjeta);
+      });
+      tarjeta.appendChild(botonEliminar);
+    }
+
+    tarjeta.addEventListener("click", () => abrirDetalleCliente(cliente));
+    contenedor.appendChild(tarjeta);
+  });
+}
+
+let clienteActual = null;
+let listaPrecios = [];
+
+async function obtenerListaPrecios() {
+  if (listaPrecios.length > 0) return listaPrecios;
+
+  try {
+    listaPrecios = await llamarBackend("precios", {});
+    localStorage.setItem("listaPrecios", JSON.stringify(listaPrecios));
+  } catch (err) {
+    const guardado = localStorage.getItem("listaPrecios");
+    listaPrecios = guardado ? JSON.parse(guardado) : [];
+  }
+  return listaPrecios;
+}
+
+function buscarMontoPorConsumo(consumoTotal) {
+  const fila = listaPrecios.find(p => Number(p.Consumo) === Number(consumoTotal));
+  return fila ? Number(fila.Monto) : null;
+}
+
+async function abrirDetalleCliente(cliente) {
+if (sesion.rol !== "Cobrador") {
+  alert("Este rol es de consulta y administración. Los cobros solo los registra el Cobrador.");
+  return;
+}
+  clienteActual = cliente;
+  await obtenerListaPrecios();
+
+  document.getElementById("pantallaPrincipal").classList.add("oculto");
+  document.getElementById("pantallaDetalle").classList.remove("oculto");
+
+  document.getElementById("detCodigo").textContent = cliente["CODIGO"];
+  document.getElementById("detNombre").textContent = cliente["Nombre Cliente"];
+  document.getElementById("detDireccion").textContent = cliente["DIRECCION"];
+
+  const tieneMedidor = !!cliente["Medidor"];
+  document.getElementById("detMedidor").textContent = tieneMedidor ? cliente["Medidor"] : "Sin medidor (cuota fija)";
+
+  document.getElementById("bloqueMedidor").classList.toggle("oculto", !tieneMedidor);
+  document.getElementById("bloqueSinMedidor").classList.toggle("oculto", tieneMedidor);
+
+  if (tieneMedidor) {
+    document.getElementById("detLecturaAnterior").value = cliente["Lectura Anterior"];
+    document.getElementById("detPteAnterior").textContent = cliente["Pte/KWH Meses Anteri."] || 0;
+    document.getElementById("detLecturaActual").value = "";
+    document.getElementById("detConsumo").textContent = "0";
+    document.getElementById("detConsumoTotal").textContent = "0";
+    document.getElementById("detLecturaActual").oninput = calcularConsumo;
+    document.getElementById("detLecturaActual").onblur = validarLecturaActual;
+  } else {
+    document.getElementById("detMontoFijo").value = "";
+    document.getElementById("detMontoFijo").oninput = calcularTotalSinMedidor;
+  }
+
+  document.getElementById("detTotalCobrar").value = "";
+  document.getElementById("detEstado").value = "";
+  document.getElementById("detKwCobrado").value = "";
+  document.getElementById("detObservaciones").value = "";
+  document.getElementById("errorDetalle").textContent = "";
+  actualizarCamposPorEstado();
+
+  // Muestra la factura que le toca a esta pareja en este momento
+  document.getElementById("detNumeroFactura").value = sesion.facturaActual || "Sin factura inicial configurada";
+}
+
+function calcularConsumo() {
+  const lecturaAnterior = Number(clienteActual["Lectura Anterior"]) || 0;
+  const lecturaActual = Number(document.getElementById("detLecturaActual").value) || 0;
+  const pteAnterior = Number(clienteActual["Pte/KWH Meses Anteri."]) || 0;
+
+  const consumo = lecturaActual > 0 ? lecturaActual - lecturaAnterior : 0;
+  const consumoTotal = consumo + pteAnterior;
+
+  document.getElementById("detConsumo").textContent = consumo > 0 ? consumo : 0;
+  document.getElementById("detConsumoTotal").textContent = consumo > 0 ? consumoTotal : 0;
+
+  if (consumo > 0) {
+    const monto = buscarMontoPorConsumo(consumoTotal);
+    document.getElementById("detTotalCobrar").value = monto !== null ? ("$" + monto.toFixed(2)) : "No encontrado en tabla Precios";
+  } else {
+    document.getElementById("detTotalCobrar").value = "";
+  }
+
+  actualizarKwPendienteParcial();
+}
+
+function validarLecturaActual() {
+  const lecturaAnterior = Number(clienteActual["Lectura Anterior"]) || 0;
+  const campo = document.getElementById("detLecturaActual");
+  const lecturaActual = Number(campo.value) || 0;
+
+  if (lecturaActual > 0 && lecturaActual < lecturaAnterior) {
+    alert("La lectura actual no puede ser menor a la lectura anterior (" + lecturaAnterior + ")");
+    campo.value = "";
+    calcularConsumo();
+  }
+}
+
+function calcularTotalSinMedidor() {
+  const monto = Number(document.getElementById("detMontoFijo").value) || 0;
+  document.getElementById("detTotalCobrar").value = "$" + monto.toFixed(2);
+  actualizarKwPendienteParcial();
+}
+
+function actualizarKwPendienteParcial() {
+  const consumoTotal = Number(document.getElementById("detConsumoTotal")?.textContent) || 0;
+  const montoFijo = Number(document.getElementById("detMontoFijo")?.value) || 0;
+  const base = clienteActual["Medidor"] ? consumoTotal : montoFijo;
+  const kwCobrado = Number(document.getElementById("detKwCobrado").value) || 0;
+
+  const pendienteNuevo = base - kwCobrado;
+  document.getElementById("detKwPendienteNuevo").textContent = pendienteNuevo > 0 ? pendienteNuevo.toFixed(2) : "0";
+
+  const montoParcial = buscarMontoPorConsumo(kwCobrado);
+  document.getElementById("detMontoParcial").textContent = montoParcial !== null ? ("$" + montoParcial.toFixed(2)) : "No encontrado en tabla Precios";
+}
+
+function actualizarCamposPorEstado() {
+  const estado = document.getElementById("detEstado").value;
+
+  document.getElementById("bloqueParcial").classList.toggle("oculto", estado !== "Cobro Parcial");
+  document.getElementById("bloqueFotoFactura").classList.toggle("oculto", estado !== "Cobro Total" && estado !== "Cobro Parcial");
+  document.getElementById("bloqueFotoNotificacion").classList.toggle("oculto", estado !== "Cobro Parcial" && estado !== "Notificacion");
+
+  document.getElementById("detKwCobrado").oninput = actualizarKwPendienteParcial;
+}
+
+function cerrarDetalle() {
+  document.getElementById("pantallaDetalle").classList.add("oculto");
+  document.getElementById("pantallaPrincipal").classList.remove("oculto");
+}
+
+function leerArchivoBase64(input) {
+  if (!input.files || !input.files.length) return Promise.resolve(null);
+  return comprimirImagen(input.files[0]);
+}
+
+function comprimirImagen(archivo) {
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxAncho = 1280;
+        const escala = Math.min(1, maxAncho / img.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width * escala;
+        canvas.height = img.height * escala;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.7));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    lector.onerror = reject;
+    lector.readAsDataURL(archivo);
+  });
+}
+
+function obtenerUbicacionActual() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve({
+        disponible: false,
+        mensaje: "Este dispositivo no soporta ubicación GPS."
+      });
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (posicion) => {
+        resolve({
+          disponible: true,
+          latitud: posicion.coords.latitude,
+          longitud: posicion.coords.longitude,
+          precisionGps: posicion.coords.accuracy
+        });
+      },
+      (error) => {
+        resolve({
+          disponible: false,
+          mensaje: error.message || "No se pudo obtener ubicación."
+        });
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 30000
+      }
+    );
+  });
+}
+
+async function guardarCobro() {
+  const errorDiv = document.getElementById("errorDetalle");
+  errorDiv.textContent = "";
+
+  if (sesion.rol !== "Cobrador") {
+    errorDiv.textContent =
+      "Tu rol no tiene permiso para registrar cobros.";
+    return;
+  }
+
+  const estado = document.getElementById("detEstado").value;
+  const observaciones = document
+    .getElementById("detObservaciones")
+    .value
+    .trim();
+
+  const inputFotoFactura =
+    document.getElementById("detFotoFactura");
+
+  const inputFotoNotificacion =
+    document.getElementById("detFotoNotificacion");
+
+  if (!estado) {
+    errorDiv.textContent = "Selecciona el estado del cobro.";
+    return;
+  }
+
+  if (!observaciones) {
+    errorDiv.textContent = "Las observaciones son obligatorias.";
+    return;
+  }
+
+  if (!sesion.usuario) {
+    errorDiv.textContent =
+      "No se encontró el usuario de sesión. Cierra sesión e ingresa nuevamente.";
+    return;
+  }
+
+  if (!sesion.inspector1 || !sesion.inspector2) {
+    errorDiv.textContent =
+      "No se identificó la pareja de inspectores. Cierra sesión e ingresa nuevamente.";
+    return;
+  }
+
+  if (!sesion.facturaActual) {
+    errorDiv.textContent =
+      "No se identificó la factura actual. Cierra sesión e ingresa nuevamente.";
+    return;
+  }
+
+  if (
+    (estado === "Cobro Total" || estado === "Cobro Parcial") &&
+    !inputFotoFactura.files.length
+  ) {
+    errorDiv.textContent = "Falta la foto de factura.";
+    return;
+  }
+
+  if (
+    (estado === "Cobro Parcial" || estado === "Notificacion") &&
+    !inputFotoNotificacion.files.length
+  ) {
+    errorDiv.textContent = "Falta la foto de notificación.";
+    return;
+  }
+
+  const boton = document.getElementById("botonGuardarCobro");
+  boton.disabled = true;
+  boton.textContent = "Guardando...";
+
+  try {
+    const fotoFactura = await leerArchivoBase64(inputFotoFactura);
+const ubicacion = await obtenerUbicacionActual();
+    const fotoNotificacion = await leerArchivoBase64(
+      inputFotoNotificacion
+    );
+
+    const parejaInspectores =
+      sesion.inspector1 + " / " + sesion.inspector2;
+
+    const datos = {
+  codigo: clienteActual["CODIGO"],
+  estado: estado,
+  observaciones: observaciones,
+
+  // Seguridad: este usuario se valida en Apps Script.
+  usuarioLogin: sesion.usuario,
+
+  // Historial y avance: la pareja de inspectores.
+  usuario: parejaInspectores,
+
+  numeroFactura: sesion.facturaActual,
+  fotoFactura: fotoFactura,
+  fotoNotificacion: fotoNotificacion
+};
+
+// El GPS se agrega después de crear el objeto.
+if (ubicacion.disponible) {
+  datos.latitud = ubicacion.latitud;
+  datos.longitud = ubicacion.longitud;
+  datos.precisionGps = ubicacion.precisionGps;
+} else {
+  console.warn(
+    "Cobro guardado sin ubicación GPS:",
+    ubicacion.mensaje || "No disponible"
+  );
+
+  const continuarSinGps = confirm(
+    "No se pudo obtener la ubicación GPS.\n\n" +
+    "Detalle: " + (ubicacion.mensaje || "No disponible") +
+    "\n\n¿Deseas guardar el cobro sin ubicación?"
+  );
+
+  if (!continuarSinGps) {
+    boton.disabled = false;
+    boton.textContent = "Guardar cobro";
+    return;
+  }
+}
+
+    if (clienteActual["Medidor"]) {
+      datos.lecturaActual = document
+        .getElementById("detLecturaActual")
+        .value;
+    } else {
+      datos.montoFijo = document
+        .getElementById("detMontoFijo")
+        .value;
+    }
+
+    if (estado === "Cobro Parcial") {
+      datos.kwCobrado = document
+        .getElementById("detKwCobrado")
+        .value;
+
+    } else if (estado === "Notificacion") {
+      datos.kwCobrado = 0;
+    }
+
+alert(
+  "GPS enviado al servidor:\n\n" +
+  "Latitud: " + (
+    datos.latitud !== undefined
+      ? datos.latitud
+      : "NO ENVIADA"
+  ) +
+  "\nLongitud: " + (
+    datos.longitud !== undefined
+      ? datos.longitud
+      : "NO ENVIADA"
+  ) +
+  "\nPrecisión: " + (
+    datos.precisionGps !== undefined
+      ? datos.precisionGps + " m"
+      : "NO ENVIADA"
+  )
+);
+
+alert(
+  "VERIFICACIÓN GPS ANTES DE GUARDAR\n\n" +
+  "Latitud: " + (
+    datos.latitud !== undefined
+      ? datos.latitud
+      : "NO ENVIADA"
+  ) +
+  "\nLongitud: " + (
+    datos.longitud !== undefined
+      ? datos.longitud
+      : "NO ENVIADA"
+  ) +
+  "\nPrecisión: " + (
+    datos.precisionGps !== undefined
+      ? datos.precisionGps + " metros"
+      : "NO ENVIADA"
+  )
+);
+
+    const resultado = await llamarBackend("guardarCobro", datos);
+
+    if (!resultado.exito) {
+      errorDiv.textContent =
+        resultado.mensaje || "No se pudo guardar el cobro.";
+
+      boton.disabled = false;
+      boton.textContent = "Guardar cobro";
+      return;
+    }
+
+    alert(
+      "Cobro guardado." +
+      (resultado.numeroFactura
+        ? " N° Factura: " + resultado.numeroFactura
+        : "")
+    );
+
+    // Solo Cobrador tiene factura secuencial; avanzamos al confirmar guardado.
+    sesion.facturaActual = incrementarFactura(sesion.facturaActual);
+
+    localStorage.setItem(
+      "sesionApp",
+      JSON.stringify(sesion)
+    );
+
+    actualizarTextoFactura();
+
+    cerrarDetalle();
+    cargarClientesParaCobro();
+    cargarAvanceDelDia();
+
+    atrasadosCargados = false;
+
+  } catch (err) {
+    console.error("Error real al guardar cobro:", err);
+
+    errorDiv.textContent = err.name === "AbortError"
+      ? "Tardó demasiado en responder. Verifica la señal e intenta nuevamente."
+      : "Error al guardar: " + (err.message || "error desconocido");
+
+  } finally {
+    boton.disabled = false;
+    boton.textContent = "Guardar cobro";
+  }
+}
+
+
+async function descargarReporteExcel() {
+  const esPermitido = [
+    "Contador",
+    "Administrador"
+  ].includes(sesion.rol);
+
+  if (!esPermitido) {
+    alert("Tu rol no tiene permiso para descargar reportes.");
+    return;
+  }
+
+  const fecha = document.getElementById(
+    "campoFechaAvance"
+  ).value;
+
+  if (!fecha) {
+    alert("Selecciona una fecha antes de descargar el reporte.");
+    return;
+  }
+
+  const boton = document.getElementById(
+    "botonReporteExcel"
+  );
+
+  boton.disabled = true;
+  boton.textContent = "Generando...";
+
+  try {
+    const resultado = await llamarBackend(
+      "generarReporteCobros",
+      {
+        usuarioSolicitante: sesion.usuario,
+        fecha: fecha,
+        zona: sesion.zona || ""
+      }
+    );
+
+    if (!resultado.exito) {
+      alert(resultado.mensaje || "No se pudo generar el reporte.");
+      return;
+    }
+
+    window.open(resultado.url, "_blank");
+
+  } catch (err) {
+    console.error("Error al generar Excel:", err);
+    alert("No se pudo generar el reporte Excel.");
+
+  } finally {
+    boton.disabled = false;
+    boton.textContent = "Excel";
+  }
+}
+
+async function abrirUbicaciones() {
+  const permitido = [
+    "Supervisor",
+    "Administrador"
+  ].includes(sesion.rol);
+
+  if (!permitido) {
+    alert("Tu rol no tiene permiso para ver ubicaciones.");
+    return;
+  }
+
+  const fecha = document.getElementById(
+    "campoFechaAvance"
+  ).value || obtenerFechaLocalISO();
+
+  document.getElementById("pantallaPrincipal")
+    .classList
+    .add("oculto");
+
+  document.getElementById("pantallaUbicaciones")
+    .classList
+    .remove("oculto");
+
+  document.getElementById("textoFechaUbicaciones")
+    .textContent = "Fecha consultada: " + fecha;
+
+  const cargando = document.getElementById(
+    "cargandoUbicaciones"
+  );
+
+  const lista = document.getElementById(
+    "listaUbicaciones"
+  );
+
+  cargando.classList.remove("oculto");
+  lista.innerHTML = "";
+
+  try {
+    const resultado = await llamarBackend(
+      "ubicacionesCobros",
+      {
+        usuarioSolicitante: sesion.usuario,
+        fecha: fecha,
+        zona: sesion.zona || ""
+      }
+    );
+
+    if (!resultado.exito) {
+      throw new Error(
+        resultado.mensaje || "No se pudieron obtener ubicaciones."
+      );
+    }
+
+    const ubicaciones = resultado.ubicaciones || [];
+
+    if (ubicaciones.length === 0) {
+      lista.innerHTML =
+        '<div class="mensajeCentro">' +
+        "No hay ubicaciones GPS disponibles para esta fecha." +
+        "</div>";
+
+      return;
+    }
+
+    ubicaciones.forEach(item => {
+      const tarjeta = document.createElement("div");
+      tarjeta.className = "tarjetaCliente";
+
+      const urlMapa =
+        "https://www.google.com/maps?q=" +
+        encodeURIComponent(item.latitud + "," + item.longitud);
+
+      tarjeta.innerHTML = `
+        <div class="codigo">${escaparHtml(item.codigo)}</div>
+        <div class="nombre">${escaparHtml(item.cliente)}</div>
+        <div class="fila">
+          <span class="etiqueta">Pareja:</span>
+          ${escaparHtml(item.pareja)}
+        </div>
+        <div class="fila">
+          <span class="etiqueta">Hora:</span>
+          ${escaparHtml(item.hora)}
+          ·
+          <span class="etiqueta">Monto:</span>
+          $${Number(item.monto).toFixed(2)}
+        </div>
+        <div class="fila">
+          <span class="etiqueta">Precisión GPS:</span>
+          ${Number(item.precisionGps).toFixed(0)} m
+        </div>
+        <button class="botonLiberarUno">
+          Abrir en Google Maps
+        </button>
+      `;
+
+      tarjeta.querySelector(".botonLiberarUno")
+        .addEventListener("click", () => {
+          window.open(urlMapa, "_blank");
+        });
+
+      lista.appendChild(tarjeta);
+    });
+
+  } catch (err) {
+    console.error("Error al cargar ubicaciones:", err);
+
+    lista.innerHTML =
+      '<div class="mensajeCentro">' +
+      escaparHtml(err.message || "No se pudieron cargar las ubicaciones.") +
+      "</div>";
+
+  } finally {
+    cargando.classList.add("oculto");
+  }
+}
+
+function cerrarUbicaciones() {
+  document.getElementById("pantallaUbicaciones")
+    .classList
+    .add("oculto");
+
+  document.getElementById("pantallaPrincipal")
+    .classList
+    .remove("oculto");
+}
+</script>
+
+</body>
+</html>
