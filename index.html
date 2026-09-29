@@ -610,7 +610,10 @@ window.addEventListener("DOMContentLoaded", () => {
 // Usamos text/plain para evitar que el navegador mande una petición
 // de verificación (preflight) que Apps Script no responde bien.
 async function llamarBackend(accion, datos) {
-  const cuerpo = Object.assign({ accion: accion }, datos);
+  const cuerpo = Object.assign(
+    { accion: accion, token: sesion.token || "" },
+    datos
+  );
   const controlador = new AbortController();
   const limite = setTimeout(() => controlador.abort(), 45000);
 
@@ -621,10 +624,26 @@ async function llamarBackend(accion, datos) {
       body: JSON.stringify(cuerpo),
       signal: controlador.signal
     });
-    return await respuesta.json();
+
+    const resultado = await respuesta.json();
+
+    if (resultado && resultado.sesionExpirada) {
+      manejarSesionExpirada();
+      throw new Error(resultado.mensaje || "Sesión expirada.");
+    }
+
+    return resultado;
   } finally {
     clearTimeout(limite);
   }
+}
+
+function manejarSesionExpirada() {
+  localStorage.removeItem("sesionApp");
+  localStorage.removeItem("clientesParaCobro");
+  localStorage.removeItem("listaPrecios");
+  alert("Tu sesión expiró. Inicia sesión de nuevo.");
+  location.reload();
 }
 
 function escaparHtml(valor) {
@@ -666,6 +685,7 @@ async function intentarLogin() {
     }
 
     sesion.usuario = usuario;
+           sesion.token = String(resultado.token || "");
     sesion.rol = String(resultado.rol || "").trim();
     sesion.zona = String(resultado.zona || "").trim();
     sesion.inspector1 = null;
@@ -1050,12 +1070,26 @@ $${Number(item.monto).toFixed(2)}
   }
 }
 
-function cerrarSesion() {
+async function cerrarSesion() {
   const confirmar = confirm("¿Seguro que quieres cerrar sesión?");
   if (!confirmar) return;
 
+  try {
+    await llamarBackend("logout", {});
+  } catch (err) {
+    // Sin señal: la sesión se cierra igual en este equipo.
+  }
+
   localStorage.removeItem("sesionApp");
-  sesion = { usuario: null, rol: null, zona: null, inspector1: null, inspector2: null };
+  localStorage.removeItem("clientesParaCobro");
+  localStorage.removeItem("listaPrecios");
+
+  sesion = {
+    usuario: null, rol: null, zona: null,
+    inspector1: null, inspector2: null,
+    facturaActual: null, token: null
+  };
+
   location.reload();
 }
 
@@ -1098,21 +1132,17 @@ async function cargarClientesAtrasados() {
       clientes.forEach(c => {
         const tarjeta = document.createElement("div");
         tarjeta.className = "tarjetaCliente";
-        tarjeta.innerHTML = `
-  <div class="codigo">${c["CODIGO"]}</div>
-  <div class="nombre">${c["Nombre Cliente"]}</div>
-  <div class="fila">${c["DIRECCION"]}</div>
-  <div class="fila">
-    <span class="badge badgePendiente">
-      ${c["Dias Sin Cobro"] === 9999
-        ? "Nunca se le ha cobrado"
-        : c["Dias Sin Cobro"] + " días sin cobro"}
-    </span>
-    <span class="badge badgePendiente">
-      ${c["Texto Meses Sin Pagar"]}
-    </span>
-  </div>
-`;
+               tarjeta.innerHTML = `
+          <div class="codigo">${escaparHtml(c["CODIGO"])}</div>
+          <div class="nombre">${escaparHtml(c["Nombre Cliente"])}</div>
+          <div class="fila">${escaparHtml(c["DIRECCION"])}</div>
+          <div class="fila">
+            ${c["Dias Sin Cobro"] === 9999
+              ? ""
+              : '<span class="badge badgePendiente">' + Number(c["Dias Sin Cobro"]) + ' días sin cobro</span>'}
+            <span class="badge badgePendiente">${escaparHtml(c["Texto Meses Sin Pagar"])}</span>
+          </div>
+        `;
         tarjeta.addEventListener("click", () => abrirDetalleCliente(c));
         contenedor.appendChild(tarjeta);
       });
@@ -1356,9 +1386,9 @@ const usuarios = respuesta.usuarios || [];
     usuarios.forEach(u => {
       const tarjeta = document.createElement("div");
       tarjeta.className = "tarjetaCliente";
-      tarjeta.innerHTML = `
-        <div class="nombre">${u.usuario}</div>
-        <div class="fila"><span class="etiqueta">Rol:</span> ${u.rol} <span class="etiqueta">· Zona:</span> ${u.zona || "Todas"}</div>
+            tarjeta.innerHTML = `
+        <div class="nombre">${escaparHtml(u.usuario)}</div>
+        <div class="fila"><span class="etiqueta">Rol:</span> ${escaparHtml(u.rol)} <span class="etiqueta">· Zona:</span> ${escaparHtml(u.zona || "Todas")}</div>
         <button class="botonLiberarUno">Cambiar contraseña</button>
       `;
       tarjeta.querySelector(".botonLiberarUno").addEventListener("click", () => cambiarContrasenaDesdeApp(u.usuario));
@@ -1431,10 +1461,10 @@ async function cargarClientesNoLiberados() {
       clientes.forEach(c => {
         const tarjeta = document.createElement("div");
         tarjeta.className = "tarjetaCliente";
-        tarjeta.innerHTML = `
-          <div class="codigo">${c["CODIGO"]}</div>
-          <div class="nombre">${c["Nombre Cliente"]}</div>
-          <div class="fila"><span class="etiqueta">Estado del último cobro:</span> ${c["Estado"] || "-"}</div>
+         tarjeta.innerHTML = `
+          <div class="codigo">${escaparHtml(c["CODIGO"])}</div>
+          <div class="nombre">${escaparHtml(c["Nombre Cliente"])}</div>
+          <div class="fila"><span class="etiqueta">Estado del último cobro:</span> ${escaparHtml(c["Estado"] || "-")}</div>
           <button class="botonLiberarUno">Liberar</button>
         `;
         tarjeta.querySelector(".botonLiberarUno").addEventListener("click", () => liberarUnCliente(c["CODIGO"], tarjeta));
@@ -1656,12 +1686,12 @@ function filtrarClientes() {
     }
 
     tarjeta.innerHTML = `
-      <div class="codigo">${cliente["CODIGO"]}</div>
-      <div class="nombre">${cliente["Nombre Cliente"]}</div>
-      <div class="fila"><span class="etiqueta">Medidor:</span> ${medidor}</div>
-      <div class="fila"><span class="etiqueta">Lectura anterior:</span> ${cliente["Lectura Anterior"]}</div>
-      <div class="fila"><span class="etiqueta">Observación:</span> ${cliente["OBSERVACIONES"] || "-"}</div>
-      <div class="fila"><span class="etiqueta">Último cobro:</span> ${fechaUltimo}</div>
+      <div class="codigo">${escaparHtml(cliente["CODIGO"])}</div>
+      <div class="nombre">${escaparHtml(cliente["Nombre Cliente"])}</div>
+      <div class="fila"><span class="etiqueta">Medidor:</span> ${escaparHtml(medidor)}</div>
+      <div class="fila"><span class="etiqueta">Lectura anterior:</span> ${escaparHtml(cliente["Lectura Anterior"])}</div>
+      <div class="fila"><span class="etiqueta">Observación:</span> ${escaparHtml(cliente["OBSERVACIONES"] || "-")}</div>
+      <div class="fila"><span class="etiqueta">Último cobro:</span> ${escaparHtml(fechaUltimo)}</div>
       <div>${badges}</div>
     `;
 
