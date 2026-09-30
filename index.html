@@ -353,6 +353,7 @@
     Usuarios
   </button>
 
+<button id="botonFacturas" class="accionPrincipal oculto" onclick="abrirPantallaFacturas()">Facturas</button>
 <button
   id="botonReporteExcel"
   class="accionPrincipal accionReporte oculto"
@@ -442,6 +443,28 @@
   </div>
 </div>
 
+<!-- PANTALLA DE FACTURAS: CONTADOR Y ADMINISTRADOR -->
+<div id="pantallaFacturas" class="oculto">
+  <button type="button" class="botonVolver" onclick="cerrarPantallaFacturas()">â† Volver a la lista</button>
+  <div class="tarjetaCliente">
+    <h2>Rangos de facturas</h2>
+    <label class="etiquetaCampo" for="facturaZona">Zona</label>
+    <select id="facturaZona" onchange="cargarRangosFacturas()">
+      <option value="">Selecciona una zona</option>
+      <option value="Santa Ana">Santa Ana</option>
+      <option value="Ahuachapan">Ahuachapan</option>
+      <option value="Sonsonate">Sonsonate</option>
+    </select>
+    <label class="etiquetaCampo" for="facturaRangoInicio">NÃºmero inicial</label>
+    <input id="facturaRangoInicio" type="number" min="1" step="1" inputmode="numeric">
+    <label class="etiquetaCampo" for="facturaRangoFin">NÃºmero final</label>
+    <input id="facturaRangoFin" type="number" min="1" step="1" inputmode="numeric">
+    <div id="errorRangoFacturas" class="error" role="status"></div>
+    <button id="botonGuardarRangoFacturas" type="button" onclick="guardarRangoFacturas()">Guardar rango</button>
+  </div>
+  <div id="estadoRangosFacturas" class="mensajeCentro" role="status"></div>
+  <div id="listaRangosFacturas"></div>
+</div>
 <!-- PANTALLA PARA LIBERAR CLIENTES -->
 <div id="pantallaLiberar" class="oculto">
   <button onclick="cerrarLiberar()" class="botonVolver">← Volver a la lista</button>
@@ -956,6 +979,8 @@ document.getElementById("botonUbicaciones")
     !(esSupervisor || esAdministrador)
   );
 
+  document.getElementById("botonFacturas")
+    .classList.toggle("oculto", !(esContador || esAdministrador));
   document.getElementById("filaFactura")
     .classList
     .toggle("oculto", !esCobrador);
@@ -2233,6 +2258,103 @@ async function descargarReporteExcel() {
   }
 }
 
+function zonaDeFacturas() {
+  return sesion.rol === "Contador"
+    ? String(sesion.zona || "").trim()
+    : document.getElementById("facturaZona").value;
+}
+
+function abrirPantallaFacturas() {
+  if (!["Contador", "Administrador"].includes(sesion.rol)) {
+    alert("Tu rol no tiene permiso para gestionar rangos de facturas.");
+    return;
+  }
+  const zona = document.getElementById("facturaZona");
+  zona.disabled = sesion.rol === "Contador";
+  zona.value = sesion.rol === "Contador" ? String(sesion.zona || "").trim() : "";
+  document.getElementById("facturaRangoInicio").value = "";
+  document.getElementById("facturaRangoFin").value = "";
+  document.getElementById("errorRangoFacturas").textContent = "";
+  document.getElementById("estadoRangosFacturas").textContent = "";
+  document.getElementById("listaRangosFacturas").replaceChildren();
+  document.getElementById("pantallaPrincipal").classList.add("oculto");
+  document.getElementById("pantallaFacturas").classList.remove("oculto");
+  if (zonaDeFacturas()) cargarRangosFacturas();
+  else document.getElementById("estadoRangosFacturas").textContent = "Selecciona una zona para consultar rangos.";
+}
+
+function cerrarPantallaFacturas() {
+  document.getElementById("pantallaFacturas").classList.add("oculto");
+  document.getElementById("pantallaPrincipal").classList.remove("oculto");
+}
+
+async function cargarRangosFacturas() {
+  if (!["Contador", "Administrador"].includes(sesion.rol)) return;
+  const zona = zonaDeFacturas();
+  const estado = document.getElementById("estadoRangosFacturas");
+  const lista = document.getElementById("listaRangosFacturas");
+  lista.replaceChildren();
+  document.getElementById("errorRangoFacturas").textContent = "";
+  if (!zona) { estado.textContent = "Selecciona una zona para consultar rangos."; return; }
+  estado.textContent = "Cargando rangos...";
+  try {
+    const r = await llamarBackend("facturasDisponibles", { zona });
+    if (!r || !r.exito) throw new Error(r?.mensaje || "No se pudieron cargar los rangos.");
+    if (zona !== zonaDeFacturas()) return;
+    if (!Array.isArray(r.rangos) || !Array.isArray(r.disponibles)) throw new Error("La respuesta de facturas no tiene el formato esperado.");
+    estado.textContent = r.rangos.length
+      ? "Facturas disponibles en esta zona: " + r.disponibles.length
+      : "AÃºn no hay rangos asignados en esta zona.";
+    r.rangos.forEach(item => {
+      const tarjeta = document.createElement("div");
+      tarjeta.className = "tarjetaCliente";
+      const nombre = document.createElement("div");
+      nombre.className = "nombre";
+      nombre.textContent = "Rango " + item.inicio + " a " + item.fin;
+      const detalle = document.createElement("div");
+      detalle.className = "fila";
+      detalle.textContent = "Total: " + item.total + " Â· Usadas: " + item.usadas + " Â· Disponibles: " + item.disponibles;
+      tarjeta.append(nombre, detalle);
+      lista.appendChild(tarjeta);
+    });
+  } catch (err) {
+    console.error("Error al consultar rangos:", err);
+    if (zona === zonaDeFacturas()) estado.textContent = err.message || "No se pudieron consultar los rangos.";
+  }
+}
+
+async function guardarRangoFacturas() {
+  if (!["Contador", "Administrador"].includes(sesion.rol)) return;
+  const zona = zonaDeFacturas();
+  const inicioTexto = document.getElementById("facturaRangoInicio").value.trim();
+  const finTexto = document.getElementById("facturaRangoFin").value.trim();
+  const inicio = Number(inicioTexto);
+  const fin = Number(finTexto);
+  const error = document.getElementById("errorRangoFacturas");
+  const boton = document.getElementById("botonGuardarRangoFacturas");
+  error.textContent = "";
+  if (!zona) { error.textContent = "Selecciona la zona."; return; }
+  if (!inicioTexto || !finTexto || !Number.isSafeInteger(inicio) || !Number.isSafeInteger(fin) || inicio <= 0 || fin < inicio || fin - inicio + 1 > 5000) {
+    error.textContent = "Indica enteros positivos; el final no puede ser menor y el rango no puede superar 5000 facturas.";
+    return;
+  }
+  if (!confirm("Â¿Asignar a " + zona + " el rango de facturas " + inicio + " a " + fin + "?")) return;
+  boton.disabled = true;
+  boton.textContent = "Guardando...";
+  try {
+    const r = await llamarBackend("guardarRangoFacturas", { zona, inicio, fin });
+    if (!r || !r.exito) { error.textContent = r?.mensaje || "No se pudo guardar el rango."; return; }
+    document.getElementById("facturaRangoInicio").value = "";
+    document.getElementById("facturaRangoFin").value = "";
+    await cargarRangosFacturas();
+  } catch (err) {
+    console.error("Error al guardar rango:", err);
+    error.textContent = "No se pudo confirmar el guardado. Consulta la lista antes de intentar otra vez.";
+  } finally {
+    boton.disabled = false;
+    boton.textContent = "Guardar rango";
+  }
+}
 async function abrirUbicaciones() {
   const permitido = [
     "Supervisor",
