@@ -462,6 +462,15 @@
   <button onclick="cerrarAgregar()" class="botonVolver">← Volver a la lista</button>
 
   <div class="tarjetaCliente">
+    <div id="bloqueZonaAgregar" class="oculto">
+      <label class="etiquetaCampo" for="zonaAgregar">Zona del cliente</label>
+      <select id="zonaAgregar" onchange="cargarClasificacionesAgregar()">
+        <option value="">Selecciona la zona...</option>
+        <option value="Santa Ana">Santa Ana</option>
+        <option value="Ahuachapan">Ahuachapan</option>
+        <option value="Sonsonate">Sonsonate</option>
+      </select>
+    </div>
     <label class="etiquetaCampo">Nombre del cliente (obligatorio)</label>
     <input type="text" id="nuevoNombre">
 
@@ -931,7 +940,7 @@ document.getElementById("botonReporteExcel")
     esSupervisor || esAdministrador;
 
   const puedeLiberar =
-    esSupervisor || esAdministrador;
+    esContador || esSupervisor || esAdministrador;
 
   const nombres = esCobrador && sesion.inspector1
     ? sesion.inspector1 + " / " + sesion.inspector2
@@ -961,7 +970,7 @@ document.getElementById("botonUbicaciones")
 
   document.getElementById("botonAgregarCliente")
     .classList
-    .toggle("oculto", !esAdministrador);
+    .toggle("oculto", false);
 
   document.getElementById("botonLiberarClientes")
     .classList
@@ -1215,26 +1224,39 @@ async function cargarClientesAtrasados() {
   cargando.classList.add("oculto");
 }
 
+async function cargarClasificacionesAgregar() {
+  const zona = sesion.rol === "Administrador"
+    ? document.getElementById("zonaAgregar").value
+    : sesion.zona;
+  const lista = document.getElementById("opcionesClasificacion");
+  lista.textContent = "";
+  document.getElementById("nuevoClasificacion").value = "";
+  if (!zona) return;
+  try {
+    const resultado = await llamarBackend("clasificacionesPorZona", { zona });
+    if (!Array.isArray(resultado)) throw new Error(resultado?.mensaje || "No se pudieron cargar clasificaciones.");
+    resultado.forEach(valor => {
+      const opcion = document.createElement("option");
+      opcion.value = String(valor);
+      lista.appendChild(opcion);
+    });
+  } catch (err) {
+    document.getElementById("errorAgregar").textContent = err.message || "No se pudieron cargar clasificaciones.";
+  }
+}
+
 async function abrirPantallaAgregar() {
+  if (!["Cobrador", "Contador", "Supervisor", "Administrador"].includes(sesion.rol)) return;
   document.getElementById("pantallaPrincipal").classList.add("oculto");
   document.getElementById("pantallaAgregar").classList.remove("oculto");
-  document.getElementById("nuevoNombre").value = "";
-  document.getElementById("nuevoDireccion").value = "";
-  document.getElementById("nuevoMedidor").value = "";
+  for (const id of ["nuevoNombre", "nuevoDireccion", "nuevoMedidor", "nuevoClasificacion"]) {
+    document.getElementById(id).value = "";
+  }
   document.getElementById("nuevoLecturaInicial").value = "0";
   document.getElementById("errorAgregar").textContent = "";
-
-  const select = document.getElementById("opcionesClasificacion");
-  select.innerHTML = "";
-  document.getElementById("nuevoClasificacion").value = "";
-  try {
-    const clasificaciones = await llamarBackend("clasificacionesPorZona", { zona: sesion.zona });
-    clasificaciones.forEach(c => {
-      const opcion = document.createElement("option");
-      opcion.value = c;
-      select.appendChild(opcion);
-    });
-  } catch (err) { /* si falla, se deja vacío y puede escribir libre */ }
+  document.getElementById("bloqueZonaAgregar").classList.toggle("oculto", sesion.rol !== "Administrador");
+  document.getElementById("zonaAgregar").value = "";
+  await cargarClasificacionesAgregar();
 }
 
 function cerrarAgregar() {
@@ -1251,8 +1273,12 @@ async function guardarClienteNuevo() {
   const clasificacion = document.getElementById("nuevoClasificacion").value;
   const medidor = document.getElementById("nuevoMedidor").value.trim();
   const lecturaInicial = document.getElementById("nuevoLecturaInicial").value;
+  const zonaCliente = sesion.rol === "Administrador"
+    ? document.getElementById("zonaAgregar").value
+    : sesion.zona;
 
   errorDiv.textContent = "";
+  if (!zonaCliente) { errorDiv.textContent = "Selecciona la zona del cliente"; return; }
   if (!nombre) { errorDiv.textContent = "Falta el nombre"; return; }
   if (!direccion) { errorDiv.textContent = "Falta la dirección"; return; }
   if (!clasificacion) { errorDiv.textContent = "Falta la clasificación"; return; }
@@ -1265,7 +1291,7 @@ async function guardarClienteNuevo() {
     const resultado = await llamarBackend("agregarCliente", {
       nombreCliente: nombre,
       direccion: direccion,
-      zona: sesion.zona,
+      zona: zonaCliente,
       clasificacion: clasificacion,
       medidor: medidor,
       lecturaInicial: lecturaInicial,
@@ -1468,6 +1494,7 @@ const usuarios = respuesta.usuarios || [];
 
 function abrirPantallaLiberar() {
   const puedeLiberar = [
+    "Contador",
     "Supervisor",
     "Administrador"
   ].includes(sesion.rol);
@@ -1661,7 +1688,7 @@ function pintarListaClientes(clientes) {
 }
 
 async function desactivarClienteDesdeTarjeta(codigo, tarjeta) {
-  if (sesion.rol !== "Administrador") {
+  if (!["Contador", "Supervisor", "Administrador"].includes(sesion.rol)) {
     alert("Tu rol no tiene permiso para desactivar clientes.");
     return;
   }
@@ -1679,15 +1706,434 @@ async function desactivarClienteDesdeTarjeta(codigo, tarjeta) {
       usuario: sesion.usuario
     });
 
-        if (!resultado.exito) {
+    if (!resultado.exito) {
+      alert(resultado.mensaje || "No se pudo desactivar el cliente.");
+      return;
+    }
+
+    tarjeta.remove();
+
+    alert(
+      resultado.mensaje ||
+      "Cliente desactivado correctamente."
+    );
+
+  } catch (err) {
+    console.error("Error al desactivar cliente:", err);
+    alert("No se pudo conectar para desactivar el cliente.");
+  }
+}
+
+function filtrarClientes() {
+  const texto = (document.getElementById("campoBuscar").value || "").trim().toLowerCase();
+  const contenedor = document.getElementById("listaClientes");
+  contenedor.textContent = "";
+  const lista = Array.isArray(clientesCargados) ? clientesCargados : [];
+  const clientes = texto ? lista.filter(c =>
+    String(c["CODIGO"] || "").toLowerCase().includes(texto) ||
+    String(c["Nombre Cliente"] || "").toLowerCase().includes(texto)
+  ) : lista;
+  if (!clientes.length) {
+    const aviso = document.createElement("div");
+    aviso.className = "mensajeCentro";
+    aviso.textContent = "No hay clientes que coincidan";
+    contenedor.appendChild(aviso);
+    return;
+  }
+  clientes.forEach(cliente => {
+    const tarjeta = document.createElement("div");
+    tarjeta.className = "tarjetaCliente";
+    function linea(clase, etiqueta, valor) {
+      const div = document.createElement("div");
+      div.className = clase;
+      if (etiqueta) {
+        const span = document.createElement("span");
+        span.className = "etiqueta";
+        span.textContent = etiqueta;
+        div.appendChild(span);
+        div.appendChild(document.createTextNode(" " + String(valor ?? "")));
+      } else {
+        div.textContent = String(valor ?? "");
+      }
+      tarjeta.appendChild(div);
+    }
+    linea("codigo", "", cliente["CODIGO"]);
+    linea("nombre", "", cliente["Nombre Cliente"]);
+    linea("fila", "Medidor:", cliente["Medidor"] || "Sin medidor (cuota fija)");
+    linea("fila", "Lectura anterior:", cliente["Lectura Anterior"]);
+    linea("fila", "Observación:", cliente["OBSERVACIONES"] || "-");
+    linea("fila", "Último cobro:", cliente["Fecha Ultimo Cobro"] || "Sin cobros anteriores");
+    const badges = document.createElement("div");
+    function badge(clase, valor) {
+      const span = document.createElement("span");
+      span.className = "badge " + clase;
+      span.textContent = valor;
+      badges.appendChild(span);
+    }
+    const kw = Number(cliente["KW Pendiente"]) || 0;
+    if (kw > 0) badge("badgePendiente", "KW pendiente: " + kw);
+    if (cliente["Foto Factura"]) badge("badgeFoto", "Foto factura");
+    if (cliente["Foto Notificacion"]) badge("badgeFoto", "Foto notificación");
+    tarjeta.appendChild(badges);
+    if (["Contador", "Supervisor", "Administrador"].includes(sesion.rol)) {
+      const boton = document.createElement("button");
+      boton.textContent = "Desactivar";
+      boton.className = "botonLiberarUno";
+      boton.style.background = "#c00000";
+      boton.addEventListener("click", e => {
+        e.stopPropagation();
+        desactivarClienteDesdeTarjeta(cliente["CODIGO"], tarjeta);
+      });
+      tarjeta.appendChild(boton);
+    }
+    tarjeta.addEventListener("click", () => abrirDetalleCliente(cliente));
+    contenedor.appendChild(tarjeta);
+  });
+}
+
+let clienteActual = null;
+let listaPrecios = [];
+
+async function obtenerListaPrecios() {
+  if (listaPrecios.length > 0) return listaPrecios;
+
+  try {
+    listaPrecios = await llamarBackend("precios", {});
+    localStorage.setItem("listaPrecios", JSON.stringify(listaPrecios));
+  } catch (err) {
+    const guardado = localStorage.getItem("listaPrecios");
+    listaPrecios = guardado ? JSON.parse(guardado) : [];
+  }
+  return listaPrecios;
+}
+
+function buscarMontoPorConsumo(consumoTotal) {
+  const fila = listaPrecios.find(p => Number(p.Consumo) === Number(consumoTotal));
+  return fila ? Number(fila.Monto) : null;
+}
+
+async function abrirDetalleCliente(cliente) {
+if (sesion.rol !== "Cobrador") {
+  alert("Este rol es de consulta y administración. Los cobros solo los registra el Cobrador.");
+  return;
+}
+  clienteActual = cliente;
+  await obtenerListaPrecios();
+
+  document.getElementById("pantallaPrincipal").classList.add("oculto");
+  document.getElementById("pantallaDetalle").classList.remove("oculto");
+
+  document.getElementById("detCodigo").textContent = cliente["CODIGO"];
+  document.getElementById("detNombre").textContent = cliente["Nombre Cliente"];
+  document.getElementById("detDireccion").textContent = cliente["DIRECCION"];
+
+  const tieneMedidor = !!cliente["Medidor"];
+  document.getElementById("detMedidor").textContent = tieneMedidor ? cliente["Medidor"] : "Sin medidor (cuota fija)";
+
+  document.getElementById("bloqueMedidor").classList.toggle("oculto", !tieneMedidor);
+  document.getElementById("bloqueSinMedidor").classList.toggle("oculto", tieneMedidor);
+
+  if (tieneMedidor) {
+    document.getElementById("detLecturaAnterior").value = cliente["Lectura Anterior"];
+    document.getElementById("detPteAnterior").textContent = cliente["Pte/KWH Meses Anteri."] || 0;
+    document.getElementById("detLecturaActual").value = "";
+    document.getElementById("detConsumo").textContent = "0";
+    document.getElementById("detConsumoTotal").textContent = "0";
+    document.getElementById("detLecturaActual").oninput = calcularConsumo;
+    document.getElementById("detLecturaActual").onblur = validarLecturaActual;
+  } else {
+    document.getElementById("detMontoFijo").value = "";
+    document.getElementById("detMontoFijo").oninput = calcularTotalSinMedidor;
+  }
+
+  document.getElementById("detTotalCobrar").value = "";
+  document.getElementById("detEstado").value = "";
+  document.getElementById("detKwCobrado").value = "";
+  document.getElementById("detObservaciones").value = "";
+  document.getElementById("errorDetalle").textContent = "";
+  actualizarCamposPorEstado();
+
+  // Muestra la factura que le toca a esta pareja en este momento
+  document.getElementById("detNumeroFactura").value = sesion.facturaActual || "Sin factura inicial configurada";
+}
+
+function calcularConsumo() {
+  const lecturaAnterior = Number(clienteActual["Lectura Anterior"]) || 0;
+  const lecturaActual = Number(document.getElementById("detLecturaActual").value) || 0;
+  const pteAnterior = Number(clienteActual["Pte/KWH Meses Anteri."]) || 0;
+
+  const consumo = lecturaActual > 0 ? lecturaActual - lecturaAnterior : 0;
+  const consumoTotal = consumo + pteAnterior;
+
+  document.getElementById("detConsumo").textContent = consumo > 0 ? consumo : 0;
+  document.getElementById("detConsumoTotal").textContent = consumo > 0 ? consumoTotal : 0;
+
+  if (consumo > 0) {
+    const monto = buscarMontoPorConsumo(consumoTotal);
+    document.getElementById("detTotalCobrar").value = monto !== null ? ("$" + monto.toFixed(2)) : "No encontrado en tabla Precios";
+  } else {
+    document.getElementById("detTotalCobrar").value = "";
+  }
+
+  actualizarKwPendienteParcial();
+}
+
+function validarLecturaActual() {
+  const lecturaAnterior = Number(clienteActual["Lectura Anterior"]) || 0;
+  const campo = document.getElementById("detLecturaActual");
+  const lecturaActual = Number(campo.value) || 0;
+
+  if (lecturaActual > 0 && lecturaActual < lecturaAnterior) {
+    alert("La lectura actual no puede ser menor a la lectura anterior (" + lecturaAnterior + ")");
+    campo.value = "";
+    calcularConsumo();
+  }
+}
+
+function calcularTotalSinMedidor() {
+  const monto = Number(document.getElementById("detMontoFijo").value) || 0;
+  document.getElementById("detTotalCobrar").value = "$" + monto.toFixed(2);
+  actualizarKwPendienteParcial();
+}
+
+function actualizarKwPendienteParcial() {
+  const consumoTotal = Number(document.getElementById("detConsumoTotal")?.textContent) || 0;
+  const montoFijo = Number(document.getElementById("detMontoFijo")?.value) || 0;
+  const base = clienteActual["Medidor"] ? consumoTotal : montoFijo;
+  const kwCobrado = Number(document.getElementById("detKwCobrado").value) || 0;
+
+  const pendienteNuevo = base - kwCobrado;
+  document.getElementById("detKwPendienteNuevo").textContent = pendienteNuevo > 0 ? pendienteNuevo.toFixed(2) : "0";
+
+  const montoParcial = buscarMontoPorConsumo(kwCobrado);
+  document.getElementById("detMontoParcial").textContent = montoParcial !== null ? ("$" + montoParcial.toFixed(2)) : "No encontrado en tabla Precios";
+}
+
+function actualizarCamposPorEstado() {
+  const estado = document.getElementById("detEstado").value;
+
+  document.getElementById("bloqueParcial").classList.toggle("oculto", estado !== "Cobro Parcial");
+  document.getElementById("bloqueFotoFactura").classList.toggle("oculto", estado !== "Cobro Total" && estado !== "Cobro Parcial");
+  document.getElementById("bloqueFotoNotificacion").classList.toggle("oculto", estado !== "Cobro Parcial" && estado !== "Notificacion");
+
+  document.getElementById("detKwCobrado").oninput = actualizarKwPendienteParcial;
+}
+
+function cerrarDetalle() {
+  document.getElementById("pantallaDetalle").classList.add("oculto");
+  document.getElementById("pantallaPrincipal").classList.remove("oculto");
+}
+
+function leerArchivoBase64(input) {
+  if (!input.files || !input.files.length) return Promise.resolve(null);
+  return comprimirImagen(input.files[0]);
+}
+
+function comprimirImagen(archivo) {
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxAncho = 1280;
+        const escala = Math.min(1, maxAncho / img.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width * escala;
+        canvas.height = img.height * escala;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.7));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    lector.onerror = reject;
+    lector.readAsDataURL(archivo);
+  });
+}
+
+function obtenerUbicacionActual() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve({
+        disponible: false,
+        mensaje: "Este dispositivo no soporta ubicación GPS."
+      });
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (posicion) => {
+        resolve({
+          disponible: true,
+          latitud: posicion.coords.latitude,
+          longitud: posicion.coords.longitude,
+          precisionGps: posicion.coords.accuracy
+        });
+      },
+      (error) => {
+        resolve({
+          disponible: false,
+          mensaje: error.message || "No se pudo obtener ubicación."
+        });
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 30000
+      }
+    );
+  });
+}
+
+async function guardarCobro() {
+  const errorDiv = document.getElementById("errorDetalle");
+  errorDiv.textContent = "";
+
+  if (sesion.rol !== "Cobrador") {
+    errorDiv.textContent =
+      "Tu rol no tiene permiso para registrar cobros.";
+    return;
+  }
+
+  const estado = document.getElementById("detEstado").value;
+  const observaciones = document
+    .getElementById("detObservaciones")
+    .value
+    .trim();
+
+  const inputFotoFactura =
+    document.getElementById("detFotoFactura");
+
+  const inputFotoNotificacion =
+    document.getElementById("detFotoNotificacion");
+
+  if (!estado) {
+    errorDiv.textContent = "Selecciona el estado del cobro.";
+    return;
+  }
+
+  if (!observaciones) {
+    errorDiv.textContent = "Las observaciones son obligatorias.";
+    return;
+  }
+
+  if (!sesion.usuario) {
+    errorDiv.textContent =
+      "No se encontró el usuario de sesión. Cierra sesión e ingresa nuevamente.";
+    return;
+  }
+
+  if (!sesion.inspector1 || !sesion.inspector2) {
+    errorDiv.textContent =
+      "No se identificó la pareja de inspectores. Cierra sesión e ingresa nuevamente.";
+    return;
+  }
+
+  if (!sesion.facturaActual) {
+    errorDiv.textContent =
+      "No se identificó la factura actual. Cierra sesión e ingresa nuevamente.";
+    return;
+  }
+
+  if (
+    (estado === "Cobro Total" || estado === "Cobro Parcial") &&
+    !inputFotoFactura.files.length
+  ) {
+    errorDiv.textContent = "Falta la foto de factura.";
+    return;
+  }
+
+  if (
+    (estado === "Cobro Parcial" || estado === "Notificacion") &&
+    !inputFotoNotificacion.files.length
+  ) {
+    errorDiv.textContent = "Falta la foto de notificación.";
+    return;
+  }
+
+  const boton = document.getElementById("botonGuardarCobro");
+  boton.disabled = true;
+  boton.textContent = "Guardando...";
+
+  try {
+    const fotoFactura = await leerArchivoBase64(inputFotoFactura);
+const ubicacion = await obtenerUbicacionActual();
+    const fotoNotificacion = await leerArchivoBase64(
+      inputFotoNotificacion
+    );
+
+    const parejaInspectores =
+      sesion.inspector1 + " / " + sesion.inspector2;
+
+    const datos = {
+  codigo: clienteActual["CODIGO"],
+  estado: estado,
+  observaciones: observaciones,
+
+  // Seguridad: este usuario se valida en Apps Script.
+  usuarioLogin: sesion.usuario,
+
+  // Historial y avance: la pareja de inspectores.
+  usuario: parejaInspectores,
+
+  numeroFactura: sesion.facturaActual,
+  fotoFactura: fotoFactura,
+  fotoNotificacion: fotoNotificacion
+};
+
+// El GPS se agrega después de crear el objeto.
+if (ubicacion.disponible) {
+  datos.latitud = ubicacion.latitud;
+  datos.longitud = ubicacion.longitud;
+  datos.precisionGps = ubicacion.precisionGps;
+} else {
+  console.warn(
+    "Cobro guardado sin ubicación GPS:",
+    ubicacion.mensaje || "No disponible"
+  );
+
+  const continuarSinGps = confirm(
+    "No se pudo obtener la ubicación GPS.\n\n" +
+    "Detalle: " + (ubicacion.mensaje || "No disponible") +
+    "\n\n¿Deseas guardar el cobro sin ubicación?"
+  );
+
+  if (!continuarSinGps) {
+    boton.disabled = false;
+    boton.textContent = "Guardar cobro";
+    return;
+  }
+}
+
+    if (clienteActual["Medidor"]) {
+      datos.lecturaActual = document
+        .getElementById("detLecturaActual")
+        .value;
+    } else {
+      datos.montoFijo = document
+        .getElementById("detMontoFijo")
+        .value;
+    }
+
+    if (estado === "Cobro Parcial") {
+      datos.kwCobrado = document
+        .getElementById("detKwCobrado")
+        .value;
+
+    } else if (estado === "Notificacion") {
+      datos.kwCobrado = 0;
+    }
+
+const resultado = await llamarBackend("guardarCobro", datos);
+
+    if (!resultado.exito) {
       if (resultado.facturaNoDisponible) {
         sesion.facturaActual = resultado.siguienteFactura || null;
         localStorage.setItem("sesionApp", JSON.stringify(sesion));
         actualizarTextoFactura();
-        document.getElementById("detNumeroFactura").value =
-          sesion.facturaActual || "Sin factura disponible";
+        document.getElementById("detNumeroFactura").value = sesion.facturaActual || "Sin factura disponible";
       }
-
       errorDiv.textContent =
         resultado.mensaje || "No se pudo guardar el cobro.";
 
@@ -1703,16 +2149,15 @@ async function desactivarClienteDesdeTarjeta(codigo, tarjeta) {
         : "")
     );
 
-    // El servidor indica cuál es la siguiente factura libre de tu rango.
-    if (resultado.consumioFactura) {
-      sesion.facturaActual = resultado.siguienteFactura || null;
-      localStorage.setItem("sesionApp", JSON.stringify(sesion));
-      actualizarTextoFactura();
+    // Solo Cobrador tiene factura secuencial; avanzamos al confirmar guardado.
+    sesion.facturaActual = resultado.siguienteFactura || null;
 
-      if (!sesion.facturaActual) {
-        alert("Se agotó el rango de facturas. Usa \"Cambiar factura\" o pide al contador un rango nuevo.");
-      }
-    }
+    localStorage.setItem(
+      "sesionApp",
+      JSON.stringify(sesion)
+    );
+
+    actualizarTextoFactura();
 
     cerrarDetalle();
     cargarClientesParaCobro();
