@@ -294,10 +294,10 @@
     <div class="error" id="errorInspector"></div>
   </div>
 
-  <!-- PASO 3: factura inicial -->
+   <!-- PASO 3: factura inicial -->
   <div id="pasoFactura" class="oculto">
     <h2>¿Con qué factura inician?</h2>
-    <input type="text" id="campoFacturaInicial" placeholder="Ej: F-1001">
+    <select id="campoFacturaInicial"></select>
     <button onclick="confirmarFacturaInicial()">Continuar</button>
     <div class="error" id="errorFactura"></div>
   </div>
@@ -378,6 +378,9 @@
   <button onclick="cerrarUbicaciones()" class="botonVolver">
     ← Volver a la lista
   </button>
+
+
+
 
   <div class="tarjetaCliente">
     <div class="nombre">Ubicaciones de cobros</div>
@@ -764,38 +767,114 @@ function confirmarInspector() {
     return;
   }
 
-  sesion.inspector1 = select1.value;
+   sesion.inspector1 = select1.value;
   sesion.inspector2 = select2.value;
 
   document.getElementById("pasoInspector").classList.add("oculto");
   document.getElementById("pasoFactura").classList.remove("oculto");
+  cargarFacturasInicio();
 }
 
-async function confirmarFacturaInicial() {
-  const campo = document.getElementById("campoFacturaInicial");
-  const errorDiv = document.getElementById("errorFactura");
-  const valor = campo.value.trim();
+function describirDisponibles(lista) {
+  if (!lista.length) return "ninguna";
 
-  if (!valor) {
-    errorDiv.textContent = "Ingresa con qué número de factura inician";
-    return;
+  const partes = [];
+  let ini = lista[0];
+  let ant = lista[0];
+
+  for (let i = 1; i <= lista.length; i++) {
+    const n = lista[i];
+
+    if (n !== ant + 1) {
+      partes.push(ini === ant ? String(ini) : ini + "–" + ant);
+      ini = n;
+    }
+
+    ant = n;
   }
 
-  errorDiv.textContent = "Verificando...";
+  return partes.slice(0, 8).join(", ") + (partes.length > 8 ? "…" : "");
+}
+
+async function cargarFacturasInicio() {
+  const select = document.getElementById("campoFacturaInicial");
+  const info = document.getElementById("errorFactura");
+
+  select.innerHTML = "";
+  info.textContent = "Cargando facturas disponibles...";
+
   try {
-    const chequeo = await llamarBackend("facturaYaUsada", { zona: sesion.zona, numero: valor });
-    if (chequeo.usada) {
-      errorDiv.textContent = "Esa factura ya fue usada, ingresa otra";
+    const r = await llamarBackend("facturasDisponibles", {});
+
+    if (!r.exito) throw new Error(r.mensaje || "No se pudieron cargar las facturas.");
+
+    if (r.disponibles.length === 0) {
+      info.textContent = "El contador aún no asignó facturas disponibles para tu zona.";
       return;
     }
+
+    r.disponibles.slice(0, 500).forEach(n => {
+      const opcion = document.createElement("option");
+      opcion.value = String(n);
+      opcion.textContent = String(n);
+      select.appendChild(opcion);
+    });
+
+    info.textContent = "Disponibles: " + describirDisponibles(r.disponibles);
   } catch (err) {
-    errorDiv.textContent = "Sin conexión, no se pudo verificar. Intenta con señal.";
+    info.textContent = "Sin conexión, no se pudieron cargar las facturas. Intenta con señal.";
+  }
+}
+
+function confirmarFacturaInicial() {
+  const select = document.getElementById("campoFacturaInicial");
+  const errorDiv = document.getElementById("errorFactura");
+
+  if (!select.value) {
+    errorDiv.textContent = "Selecciona con qué factura inician.";
     return;
   }
 
   errorDiv.textContent = "";
-  sesion.facturaActual = valor;
+  sesion.facturaActual = select.value;
   guardarSesionYContinuar();
+}
+
+async function cambiarFacturaInicial() {
+  let disponibles;
+
+  try {
+    const r = await llamarBackend("facturasDisponibles", {});
+    if (!r.exito) throw new Error(r.mensaje);
+    disponibles = r.disponibles;
+  } catch (err) {
+    alert("Sin conexión, no se pudieron cargar las facturas. Intenta con señal.");
+    return;
+  }
+
+  if (disponibles.length === 0) {
+    alert("No hay facturas disponibles. Pide al contador que asigne un rango.");
+    return;
+  }
+
+  const nuevo = prompt(
+    "Facturas disponibles: " + describirDisponibles(disponibles) +
+    "\n\nEscribe el número con el que quieres continuar:",
+    sesion.facturaActual || ""
+  );
+
+  if (!nuevo || !nuevo.trim()) return;
+
+  const numero = Number(nuevo.trim());
+
+  if (!disponibles.includes(numero)) {
+    alert("Ese número no está disponible.");
+    return;
+  }
+
+  sesion.facturaActual = String(numero);
+  localStorage.setItem("sesionApp", JSON.stringify(sesion));
+  actualizarTextoFactura();
 }
 
 function incrementarFactura(numeroStr) {
@@ -808,25 +887,7 @@ function incrementarFactura(numeroStr) {
   return prefijo + siguiente;
 }
 
-async function cambiarFacturaInicial() {
-  const nuevo = prompt("Nuevo número de factura inicial:", sesion.facturaActual || "");
-  if (!nuevo || !nuevo.trim()) return;
 
-  try {
-    const chequeo = await llamarBackend("facturaYaUsada", { zona: sesion.zona, numero: nuevo.trim() });
-    if (chequeo.usada) {
-      alert("Esa factura ya fue usada, ingresa otra");
-      return;
-    }
-  } catch (err) {
-    alert("Sin conexión, no se pudo verificar. Intenta con señal.");
-    return;
-  }
-
-  sesion.facturaActual = nuevo.trim();
-  localStorage.setItem("sesionApp", JSON.stringify(sesion));
-  actualizarTextoFactura();
-}
 
 function actualizarTextoFactura() {
   const el = document.getElementById("textoFacturaActual");
@@ -1618,475 +1679,15 @@ async function desactivarClienteDesdeTarjeta(codigo, tarjeta) {
       usuario: sesion.usuario
     });
 
-    if (!resultado.exito) {
-      alert(resultado.mensaje || "No se pudo desactivar el cliente.");
-      return;
-    }
-
-    tarjeta.remove();
-
-    alert(
-      resultado.mensaje ||
-      "Cliente desactivado correctamente."
-    );
-
-  } catch (err) {
-    console.error("Error al desactivar cliente:", err);
-    alert("No se pudo conectar para desactivar el cliente.");
-  }
-}
-
-function filtrarClientes() {
-  const texto = (
-    document.getElementById("campoBuscar").value || ""
-  ).trim().toLowerCase();
-
-  const contenedor = document.getElementById("listaClientes");
-
-  if (!Array.isArray(clientesCargados)) {
-    clientesCargados = [];
-  }
-
-  contenedor.innerHTML = "";
-
-  let clientes = clientesCargados;
-
-  if (texto) {
-    clientes = clientesCargados.filter(c => {
-      const codigo = String(c["CODIGO"]).toLowerCase();
-      const nombre = String(c["Nombre Cliente"]).toLowerCase();
-      return codigo.includes(texto) || nombre.includes(texto);
-    });
-  }
-
-  if (clientes.length === 0) {
-    contenedor.innerHTML = '<div class="mensajeCentro">No hay clientes que coincidan</div>';
-    return;
-  }
-
-  clientes.forEach(cliente => {
-    const tarjeta = document.createElement("div");
-    tarjeta.className = "tarjetaCliente";
-
-    const medidor = cliente["Medidor"] ? cliente["Medidor"] : "Sin medidor (cuota fija)";
-    const kwPendiente = Number(cliente["KW Pendiente"]) || 0;
-    const tieneFotoFactura = !!cliente["Foto Factura"];
-    const tieneFotoNotificacion = !!cliente["Foto Notificacion"];
-    const fechaUltimo = cliente["Fecha Ultimo Cobro"] || "Sin cobros anteriores";
-
-    let badges = "";
-    if (kwPendiente > 0) {
-      badges += `<span class="badge badgePendiente">KW pendiente: ${kwPendiente}</span>`;
-    }
-    if (tieneFotoFactura) {
-      badges += `<span class="badge badgeFoto">Foto factura</span>`;
-    }
-    if (tieneFotoNotificacion) {
-      badges += `<span class="badge badgeFoto">Foto notificación</span>`;
-    }
-
-    tarjeta.innerHTML = `
-      <div class="codigo">${escaparHtml(cliente["CODIGO"])}</div>
-      <div class="nombre">${escaparHtml(cliente["Nombre Cliente"])}</div>
-      <div class="fila"><span class="etiqueta">Medidor:</span> ${escaparHtml(medidor)}</div>
-      <div class="fila"><span class="etiqueta">Lectura anterior:</span> ${escaparHtml(cliente["Lectura Anterior"])}</div>
-      <div class="fila"><span class="etiqueta">Observación:</span> ${escaparHtml(cliente["OBSERVACIONES"] || "-")}</div>
-      <div class="fila"><span class="etiqueta">Último cobro:</span> ${escaparHtml(fechaUltimo)}</div>
-      <div>${badges}</div>
-    `;
-
-    if (sesion.rol === "Administrador") {
-      const botonEliminar = document.createElement("button");
-      botonEliminar.textContent = "Desactivar";
-      botonEliminar.className = "botonLiberarUno";
-      botonEliminar.style.background = "#c00000";
-      botonEliminar.addEventListener("click", (e) => {
-        e.stopPropagation();
-        desactivarClienteDesdeTarjeta(cliente["CODIGO"], tarjeta);
-      });
-      tarjeta.appendChild(botonEliminar);
-    }
-
-    tarjeta.addEventListener("click", () => abrirDetalleCliente(cliente));
-    contenedor.appendChild(tarjeta);
-  });
-}
-
-let clienteActual = null;
-let listaPrecios = [];
-
-async function obtenerListaPrecios() {
-  if (listaPrecios.length > 0) return listaPrecios;
-
-  try {
-    listaPrecios = await llamarBackend("precios", {});
-    localStorage.setItem("listaPrecios", JSON.stringify(listaPrecios));
-  } catch (err) {
-    const guardado = localStorage.getItem("listaPrecios");
-    listaPrecios = guardado ? JSON.parse(guardado) : [];
-  }
-  return listaPrecios;
-}
-
-function buscarMontoPorConsumo(consumoTotal) {
-  const fila = listaPrecios.find(p => Number(p.Consumo) === Number(consumoTotal));
-  return fila ? Number(fila.Monto) : null;
-}
-
-async function abrirDetalleCliente(cliente) {
-if (sesion.rol !== "Cobrador") {
-  alert("Este rol es de consulta y administración. Los cobros solo los registra el Cobrador.");
-  return;
-}
-  clienteActual = cliente;
-  await obtenerListaPrecios();
-
-  document.getElementById("pantallaPrincipal").classList.add("oculto");
-  document.getElementById("pantallaDetalle").classList.remove("oculto");
-
-  document.getElementById("detCodigo").textContent = cliente["CODIGO"];
-  document.getElementById("detNombre").textContent = cliente["Nombre Cliente"];
-  document.getElementById("detDireccion").textContent = cliente["DIRECCION"];
-
-  const tieneMedidor = !!cliente["Medidor"];
-  document.getElementById("detMedidor").textContent = tieneMedidor ? cliente["Medidor"] : "Sin medidor (cuota fija)";
-
-  document.getElementById("bloqueMedidor").classList.toggle("oculto", !tieneMedidor);
-  document.getElementById("bloqueSinMedidor").classList.toggle("oculto", tieneMedidor);
-
-  if (tieneMedidor) {
-    document.getElementById("detLecturaAnterior").value = cliente["Lectura Anterior"];
-    document.getElementById("detPteAnterior").textContent = cliente["Pte/KWH Meses Anteri."] || 0;
-    document.getElementById("detLecturaActual").value = "";
-    document.getElementById("detConsumo").textContent = "0";
-    document.getElementById("detConsumoTotal").textContent = "0";
-    document.getElementById("detLecturaActual").oninput = calcularConsumo;
-    document.getElementById("detLecturaActual").onblur = validarLecturaActual;
-  } else {
-    document.getElementById("detMontoFijo").value = "";
-    document.getElementById("detMontoFijo").oninput = calcularTotalSinMedidor;
-  }
-
-  document.getElementById("detTotalCobrar").value = "";
-  document.getElementById("detEstado").value = "";
-  document.getElementById("detKwCobrado").value = "";
-  document.getElementById("detObservaciones").value = "";
-  document.getElementById("errorDetalle").textContent = "";
-  actualizarCamposPorEstado();
-
-  // Muestra la factura que le toca a esta pareja en este momento
-  document.getElementById("detNumeroFactura").value = sesion.facturaActual || "Sin factura inicial configurada";
-}
-
-function calcularConsumo() {
-  const lecturaAnterior = Number(clienteActual["Lectura Anterior"]) || 0;
-  const lecturaActual = Number(document.getElementById("detLecturaActual").value) || 0;
-  const pteAnterior = Number(clienteActual["Pte/KWH Meses Anteri."]) || 0;
-
-  const consumo = lecturaActual > 0 ? lecturaActual - lecturaAnterior : 0;
-  const consumoTotal = consumo + pteAnterior;
-
-  document.getElementById("detConsumo").textContent = consumo > 0 ? consumo : 0;
-  document.getElementById("detConsumoTotal").textContent = consumo > 0 ? consumoTotal : 0;
-
-  if (consumo > 0) {
-    const monto = buscarMontoPorConsumo(consumoTotal);
-    document.getElementById("detTotalCobrar").value = monto !== null ? ("$" + monto.toFixed(2)) : "No encontrado en tabla Precios";
-  } else {
-    document.getElementById("detTotalCobrar").value = "";
-  }
-
-  actualizarKwPendienteParcial();
-}
-
-function validarLecturaActual() {
-  const lecturaAnterior = Number(clienteActual["Lectura Anterior"]) || 0;
-  const campo = document.getElementById("detLecturaActual");
-  const lecturaActual = Number(campo.value) || 0;
-
-  if (lecturaActual > 0 && lecturaActual < lecturaAnterior) {
-    alert("La lectura actual no puede ser menor a la lectura anterior (" + lecturaAnterior + ")");
-    campo.value = "";
-    calcularConsumo();
-  }
-}
-
-function calcularTotalSinMedidor() {
-  const monto = Number(document.getElementById("detMontoFijo").value) || 0;
-  document.getElementById("detTotalCobrar").value = "$" + monto.toFixed(2);
-  actualizarKwPendienteParcial();
-}
-
-function actualizarKwPendienteParcial() {
-  const consumoTotal = Number(document.getElementById("detConsumoTotal")?.textContent) || 0;
-  const montoFijo = Number(document.getElementById("detMontoFijo")?.value) || 0;
-  const base = clienteActual["Medidor"] ? consumoTotal : montoFijo;
-  const kwCobrado = Number(document.getElementById("detKwCobrado").value) || 0;
-
-  const pendienteNuevo = base - kwCobrado;
-  document.getElementById("detKwPendienteNuevo").textContent = pendienteNuevo > 0 ? pendienteNuevo.toFixed(2) : "0";
-
-  const montoParcial = buscarMontoPorConsumo(kwCobrado);
-  document.getElementById("detMontoParcial").textContent = montoParcial !== null ? ("$" + montoParcial.toFixed(2)) : "No encontrado en tabla Precios";
-}
-
-function actualizarCamposPorEstado() {
-  const estado = document.getElementById("detEstado").value;
-
-  document.getElementById("bloqueParcial").classList.toggle("oculto", estado !== "Cobro Parcial");
-  document.getElementById("bloqueFotoFactura").classList.toggle("oculto", estado !== "Cobro Total" && estado !== "Cobro Parcial");
-  document.getElementById("bloqueFotoNotificacion").classList.toggle("oculto", estado !== "Cobro Parcial" && estado !== "Notificacion");
-
-  document.getElementById("detKwCobrado").oninput = actualizarKwPendienteParcial;
-}
-
-function cerrarDetalle() {
-  document.getElementById("pantallaDetalle").classList.add("oculto");
-  document.getElementById("pantallaPrincipal").classList.remove("oculto");
-}
-
-function leerArchivoBase64(input) {
-  if (!input.files || !input.files.length) return Promise.resolve(null);
-  return comprimirImagen(input.files[0]);
-}
-
-function comprimirImagen(archivo) {
-  return new Promise((resolve, reject) => {
-    const lector = new FileReader();
-    lector.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const maxAncho = 1280;
-        const escala = Math.min(1, maxAncho / img.width);
-        const canvas = document.createElement("canvas");
-        canvas.width = img.width * escala;
-        canvas.height = img.height * escala;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", 0.7));
-      };
-      img.onerror = reject;
-      img.src = e.target.result;
-    };
-    lector.onerror = reject;
-    lector.readAsDataURL(archivo);
-  });
-}
-
-function obtenerUbicacionActual() {
-  return new Promise((resolve) => {
-    if (!navigator.geolocation) {
-      resolve({
-        disponible: false,
-        mensaje: "Este dispositivo no soporta ubicación GPS."
-      });
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (posicion) => {
-        resolve({
-          disponible: true,
-          latitud: posicion.coords.latitude,
-          longitud: posicion.coords.longitude,
-          precisionGps: posicion.coords.accuracy
-        });
-      },
-      (error) => {
-        resolve({
-          disponible: false,
-          mensaje: error.message || "No se pudo obtener ubicación."
-        });
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 30000
+        if (!resultado.exito) {
+      if (resultado.facturaNoDisponible) {
+        sesion.facturaActual = resultado.siguienteFactura || null;
+        localStorage.setItem("sesionApp", JSON.stringify(sesion));
+        actualizarTextoFactura();
+        document.getElementById("detNumeroFactura").value =
+          sesion.facturaActual || "Sin factura disponible";
       }
-    );
-  });
-}
 
-async function guardarCobro() {
-  const errorDiv = document.getElementById("errorDetalle");
-  errorDiv.textContent = "";
-
-  if (sesion.rol !== "Cobrador") {
-    errorDiv.textContent =
-      "Tu rol no tiene permiso para registrar cobros.";
-    return;
-  }
-
-  const estado = document.getElementById("detEstado").value;
-  const observaciones = document
-    .getElementById("detObservaciones")
-    .value
-    .trim();
-
-  const inputFotoFactura =
-    document.getElementById("detFotoFactura");
-
-  const inputFotoNotificacion =
-    document.getElementById("detFotoNotificacion");
-
-  if (!estado) {
-    errorDiv.textContent = "Selecciona el estado del cobro.";
-    return;
-  }
-
-  if (!observaciones) {
-    errorDiv.textContent = "Las observaciones son obligatorias.";
-    return;
-  }
-
-  if (!sesion.usuario) {
-    errorDiv.textContent =
-      "No se encontró el usuario de sesión. Cierra sesión e ingresa nuevamente.";
-    return;
-  }
-
-  if (!sesion.inspector1 || !sesion.inspector2) {
-    errorDiv.textContent =
-      "No se identificó la pareja de inspectores. Cierra sesión e ingresa nuevamente.";
-    return;
-  }
-
-  if (!sesion.facturaActual) {
-    errorDiv.textContent =
-      "No se identificó la factura actual. Cierra sesión e ingresa nuevamente.";
-    return;
-  }
-
-  if (
-    (estado === "Cobro Total" || estado === "Cobro Parcial") &&
-    !inputFotoFactura.files.length
-  ) {
-    errorDiv.textContent = "Falta la foto de factura.";
-    return;
-  }
-
-  if (
-    (estado === "Cobro Parcial" || estado === "Notificacion") &&
-    !inputFotoNotificacion.files.length
-  ) {
-    errorDiv.textContent = "Falta la foto de notificación.";
-    return;
-  }
-
-  const boton = document.getElementById("botonGuardarCobro");
-  boton.disabled = true;
-  boton.textContent = "Guardando...";
-
-  try {
-    const fotoFactura = await leerArchivoBase64(inputFotoFactura);
-const ubicacion = await obtenerUbicacionActual();
-    const fotoNotificacion = await leerArchivoBase64(
-      inputFotoNotificacion
-    );
-
-    const parejaInspectores =
-      sesion.inspector1 + " / " + sesion.inspector2;
-
-    const datos = {
-  codigo: clienteActual["CODIGO"],
-  estado: estado,
-  observaciones: observaciones,
-
-  // Seguridad: este usuario se valida en Apps Script.
-  usuarioLogin: sesion.usuario,
-
-  // Historial y avance: la pareja de inspectores.
-  usuario: parejaInspectores,
-
-  numeroFactura: sesion.facturaActual,
-  fotoFactura: fotoFactura,
-  fotoNotificacion: fotoNotificacion
-};
-
-// El GPS se agrega después de crear el objeto.
-if (ubicacion.disponible) {
-  datos.latitud = ubicacion.latitud;
-  datos.longitud = ubicacion.longitud;
-  datos.precisionGps = ubicacion.precisionGps;
-} else {
-  console.warn(
-    "Cobro guardado sin ubicación GPS:",
-    ubicacion.mensaje || "No disponible"
-  );
-
-  const continuarSinGps = confirm(
-    "No se pudo obtener la ubicación GPS.\n\n" +
-    "Detalle: " + (ubicacion.mensaje || "No disponible") +
-    "\n\n¿Deseas guardar el cobro sin ubicación?"
-  );
-
-  if (!continuarSinGps) {
-    boton.disabled = false;
-    boton.textContent = "Guardar cobro";
-    return;
-  }
-}
-
-    if (clienteActual["Medidor"]) {
-      datos.lecturaActual = document
-        .getElementById("detLecturaActual")
-        .value;
-    } else {
-      datos.montoFijo = document
-        .getElementById("detMontoFijo")
-        .value;
-    }
-
-    if (estado === "Cobro Parcial") {
-      datos.kwCobrado = document
-        .getElementById("detKwCobrado")
-        .value;
-
-    } else if (estado === "Notificacion") {
-      datos.kwCobrado = 0;
-    }
-
-alert(
-  "GPS enviado al servidor:\n\n" +
-  "Latitud: " + (
-    datos.latitud !== undefined
-      ? datos.latitud
-      : "NO ENVIADA"
-  ) +
-  "\nLongitud: " + (
-    datos.longitud !== undefined
-      ? datos.longitud
-      : "NO ENVIADA"
-  ) +
-  "\nPrecisión: " + (
-    datos.precisionGps !== undefined
-      ? datos.precisionGps + " m"
-      : "NO ENVIADA"
-  )
-);
-
-alert(
-  "VERIFICACIÓN GPS ANTES DE GUARDAR\n\n" +
-  "Latitud: " + (
-    datos.latitud !== undefined
-      ? datos.latitud
-      : "NO ENVIADA"
-  ) +
-  "\nLongitud: " + (
-    datos.longitud !== undefined
-      ? datos.longitud
-      : "NO ENVIADA"
-  ) +
-  "\nPrecisión: " + (
-    datos.precisionGps !== undefined
-      ? datos.precisionGps + " metros"
-      : "NO ENVIADA"
-  )
-);
-
-    const resultado = await llamarBackend("guardarCobro", datos);
-
-    if (!resultado.exito) {
       errorDiv.textContent =
         resultado.mensaje || "No se pudo guardar el cobro.";
 
@@ -2102,15 +1703,16 @@ alert(
         : "")
     );
 
-    // Solo Cobrador tiene factura secuencial; avanzamos al confirmar guardado.
-    sesion.facturaActual = incrementarFactura(sesion.facturaActual);
+    // El servidor indica cuál es la siguiente factura libre de tu rango.
+    if (resultado.consumioFactura) {
+      sesion.facturaActual = resultado.siguienteFactura || null;
+      localStorage.setItem("sesionApp", JSON.stringify(sesion));
+      actualizarTextoFactura();
 
-    localStorage.setItem(
-      "sesionApp",
-      JSON.stringify(sesion)
-    );
-
-    actualizarTextoFactura();
+      if (!sesion.facturaActual) {
+        alert("Se agotó el rango de facturas. Usa \"Cambiar factura\" o pide al contador un rango nuevo.");
+      }
+    }
 
     cerrarDetalle();
     cargarClientesParaCobro();
