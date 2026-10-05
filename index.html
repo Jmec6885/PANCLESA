@@ -1191,6 +1191,103 @@ async function obtenerPendientesOffline() {
   });
 }
 
+function generarIdCobroOffline() {
+  if (window.crypto && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+
+  return "cobro_" +
+    Date.now().toString(36) + "_" +
+    Math.random().toString(36).slice(2, 12);
+}
+
+async function guardarPendienteOffline(pendiente) {
+  const bd = await abrirBaseOffline();
+
+  return new Promise((resolve, reject) => {
+    const transaccion = bd.transaction(
+      TABLA_PENDIENTES_OFFLINE,
+      "readwrite"
+    );
+
+    const tabla = transaccion.objectStore(TABLA_PENDIENTES_OFFLINE);
+
+    const solicitud = tabla.add(pendiente);
+
+    solicitud.onsuccess = () => resolve(pendiente);
+
+    solicitud.onerror = () => {
+      reject(
+        solicitud.error ||
+        new Error("No se pudo guardar el cobro pendiente.")
+      );
+    };
+
+    transaccion.oncomplete = () => bd.close();
+
+    transaccion.onerror = () => {
+      reject(
+        transaccion.error ||
+        new Error("Falló la transacción local.")
+      );
+    };
+  });
+}
+
+function esErrorDeConexion(error) {
+  if (!navigator.onLine) return true;
+
+  if (!error) return false;
+
+  return (
+    error.name === "AbortError" ||
+    error.name === "TypeError" ||
+    /failed to fetch|networkerror|network request failed/i
+      .test(String(error.message || ""))
+  );
+}
+
+async function crearPendienteDesdeFormulario(
+  datos,
+  fotoFactura,
+  fotoNotificacion
+) {
+  const pendiente = {
+    idCobro: generarIdCobroOffline(),
+    estado: "PENDIENTE",
+    creadoEn: new Date().toISOString(),
+
+    usuario: sesion.usuario,
+    zona: sesion.zona,
+    inspector1: sesion.inspector1,
+    inspector2: sesion.inspector2,
+
+    codigo: clienteActual["CODIGO"],
+    nombreCliente: clienteActual["Nombre Cliente"] || "",
+    numeroFactura: String(datos.numeroFactura || ""),
+    estadoCobro: datos.estado,
+    observaciones: datos.observaciones,
+
+    lecturaActual: datos.lecturaActual || "",
+    montoFijo: datos.montoFijo || "",
+    kwCobrado: datos.kwCobrado ?? "",
+
+    latitud: datos.latitud ?? "",
+    longitud: datos.longitud ?? "",
+    precisionGps: datos.precisionGps ?? "",
+
+    fotoFactura: fotoFactura || null,
+    fotoNotificacion: fotoNotificacion || null,
+
+    ultimoError: "",
+    intentos: 0
+  };
+
+  await guardarPendienteOffline(pendiente);
+
+  return pendiente;
+}
+
 async function actualizarContadorPendientesOffline() {
   const boton = document.getElementById(
     "botonPendientesOffline"
@@ -2540,21 +2637,21 @@ async function guardarCobro() {
     return;
   }
 
-  if (!sesion.usuario) {
+  if (!sesion.usuario || !sesion.zona) {
     errorDiv.textContent =
-      "No se encontró el usuario de sesión. Cierra sesión e ingresa nuevamente.";
+      "No se encontró el usuario o la zona de sesión.";
     return;
   }
 
   if (!sesion.inspector1 || !sesion.inspector2) {
     errorDiv.textContent =
-      "No se identificó la pareja de inspectores. Cierra sesión e ingresa nuevamente.";
+      "No se identificó la pareja de inspectores.";
     return;
   }
 
   if (!sesion.facturaActual) {
     errorDiv.textContent =
-      "No se identificó la factura actual. Cierra sesión e ingresa nuevamente.";
+      "No se identificó la factura actual.";
     return;
   }
 
@@ -2580,55 +2677,41 @@ async function guardarCobro() {
 
   try {
     const fotoFactura = await leerArchivoBase64(inputFotoFactura);
-const ubicacion = await obtenerUbicacionActual();
     const fotoNotificacion = await leerArchivoBase64(
       inputFotoNotificacion
     );
 
-    const parejaInspectores =
-      sesion.inspector1 + " / " + sesion.inspector2;
+    const ubicacion = await obtenerUbicacionActual();
 
     const datos = {
-  codigo: clienteActual["CODIGO"],
-  estado: estado,
-  observaciones: observaciones,
+      codigo: clienteActual["CODIGO"],
+      estado: estado,
+      observaciones: observaciones,
 
-  // Seguridad: este usuario se valida en Apps Script.
-  usuarioLogin: sesion.usuario,
-inspector1: sesion.inspector1,
-inspector2: sesion.inspector2,
+      usuarioLogin: sesion.usuario,
+      usuario: sesion.inspector1 + " / " + sesion.inspector2,
 
-  // Historial y avance: la pareja de inspectores.
-  usuario: parejaInspectores,
+      numeroFactura: sesion.facturaActual,
+      fotoFactura: fotoFactura,
+      fotoNotificacion: fotoNotificacion
+    };
 
-  numeroFactura: sesion.facturaActual,
-  fotoFactura: fotoFactura,
-  fotoNotificacion: fotoNotificacion
-};
+    if (ubicacion.disponible) {
+      datos.latitud = ubicacion.latitud;
+      datos.longitud = ubicacion.longitud;
+      datos.precisionGps = ubicacion.precisionGps;
+    } else {
+      const continuarSinGps = confirm(
+        "No se pudo obtener la ubicación GPS.\n\n" +
+        "Detalle: " +
+        (ubicacion.mensaje || "No disponible") +
+        "\n\n¿Deseas continuar sin GPS?"
+      );
 
-// El GPS se agrega después de crear el objeto.
-if (ubicacion.disponible) {
-  datos.latitud = ubicacion.latitud;
-  datos.longitud = ubicacion.longitud;
-  datos.precisionGps = ubicacion.precisionGps;
-} else {
-  console.warn(
-    "Cobro guardado sin ubicación GPS:",
-    ubicacion.mensaje || "No disponible"
-  );
-
-  const continuarSinGps = confirm(
-    "No se pudo obtener la ubicación GPS.\n\n" +
-    "Detalle: " + (ubicacion.mensaje || "No disponible") +
-    "\n\n¿Deseas guardar el cobro sin ubicación?"
-  );
-
-  if (!continuarSinGps) {
-    boton.disabled = false;
-    boton.textContent = "Guardar cobro";
-    return;
-  }
-}
+      if (!continuarSinGps) {
+        return;
+      }
+    }
 
     if (clienteActual["Medidor"]) {
       datos.lecturaActual = document
@@ -2649,20 +2732,37 @@ if (ubicacion.disponible) {
       datos.kwCobrado = 0;
     }
 
-const resultado = await llamarBackend("guardarCobro", datos);
+    if (!navigator.onLine) {
+      const pendiente = await crearPendienteDesdeFormulario(
+        datos,
+        fotoFactura,
+        fotoNotificacion
+      );
+
+      alert(
+        "Cobro guardado en este teléfono.\n\n" +
+        "Factura: " + pendiente.numeroFactura +
+        "\nEstado: pendiente de sincronizar."
+      );
+
+      sesion.facturaActual = null;
+      localStorage.setItem(
+        "sesionApp",
+        JSON.stringify(sesion)
+      );
+
+      actualizarTextoFactura();
+      await actualizarContadorPendientesOffline();
+
+      cerrarDetalle();
+      return;
+    }
+
+    const resultado = await llamarBackend("guardarCobro", datos);
 
     if (!resultado.exito) {
-      if (resultado.facturaNoDisponible) {
-        sesion.facturaActual = resultado.siguienteFactura || null;
-        localStorage.setItem("sesionApp", JSON.stringify(sesion));
-        actualizarTextoFactura();
-        document.getElementById("detNumeroFactura").value = sesion.facturaActual || "Sin factura disponible";
-      }
       errorDiv.textContent =
         resultado.mensaje || "No se pudo guardar el cobro.";
-
-      boton.disabled = false;
-      boton.textContent = "Guardar cobro";
       return;
     }
 
@@ -2673,7 +2773,6 @@ const resultado = await llamarBackend("guardarCobro", datos);
         : "")
     );
 
-    // Solo Cobrador tiene factura secuencial; avanzamos al confirmar guardado.
     sesion.facturaActual = resultado.siguienteFactura || null;
 
     localStorage.setItem(
@@ -2689,19 +2788,84 @@ const resultado = await llamarBackend("guardarCobro", datos);
 
     atrasadosCargados = false;
 
-  } catch (err) {
-    console.error("Error real al guardar cobro:", err);
+  } catch (error) {
+    console.error("Error al guardar cobro:", error);
 
-    errorDiv.textContent = err.name === "AbortError"
-      ? "Tardó demasiado en responder. Verifica la señal e intenta nuevamente."
-      : "Error al guardar: " + (err.message || "error desconocido");
+    if (esErrorDeConexion(error)) {
+      try {
+        const fotoFactura = await leerArchivoBase64(inputFotoFactura);
+        const fotoNotificacion = await leerArchivoBase64(
+          inputFotoNotificacion
+        );
+
+        const datosRespaldo = {
+          codigo: clienteActual["CODIGO"],
+          estado: estado,
+          observaciones: observaciones,
+          usuarioLogin: sesion.usuario,
+          usuario: sesion.inspector1 + " / " + sesion.inspector2,
+          numeroFactura: sesion.facturaActual,
+
+          lecturaActual: clienteActual["Medidor"]
+            ? document.getElementById("detLecturaActual").value
+            : "",
+
+          montoFijo: clienteActual["Medidor"]
+            ? ""
+            : document.getElementById("detMontoFijo").value,
+
+          kwCobrado: estado === "Cobro Parcial"
+            ? document.getElementById("detKwCobrado").value
+            : (estado === "Notificacion" ? 0 : "")
+        };
+
+        const pendiente = await crearPendienteDesdeFormulario(
+          datosRespaldo,
+          fotoFactura,
+          fotoNotificacion
+        );
+
+        alert(
+          "No hubo conexión con el servidor.\n\n" +
+          "El cobro quedó guardado en este teléfono." +
+          "\nFactura: " + pendiente.numeroFactura +
+          "\nEstado: pendiente de sincronizar."
+        );
+
+        sesion.facturaActual = null;
+        localStorage.setItem(
+          "sesionApp",
+          JSON.stringify(sesion)
+        );
+
+        actualizarTextoFactura();
+        await actualizarContadorPendientesOffline();
+
+        cerrarDetalle();
+
+      } catch (errorLocal) {
+        console.error(
+          "No se pudo guardar el pendiente local:",
+          errorLocal
+        );
+
+        errorDiv.textContent =
+          "No se pudo guardar ni enviar el cobro. " +
+          "No cierres esta pantalla: " +
+          (errorLocal.message || "error local desconocido");
+      }
+
+    } else {
+      errorDiv.textContent =
+        "Error al guardar: " +
+        (error.message || "error desconocido");
+    }
 
   } finally {
     boton.disabled = false;
     boton.textContent = "Guardar cobro";
   }
 }
-
 
 async function descargarReporteExcel() {
   const esPermitido = [
