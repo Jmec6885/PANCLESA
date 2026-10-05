@@ -336,6 +336,15 @@
   </button>
 
   <button
+    id="botonPrepararOffline"
+    class="accionPrincipal oculto"
+    onclick="prepararTrabajoOffline()"
+    style="background:#0f6b3a;"
+  >
+    Preparar sin conexión
+  </button>
+
+  <button
     id="botonAgregarCliente"
     class="accionPrincipal accionAgregar oculto"
     onclick="abrirPantallaAgregar()"
@@ -377,6 +386,8 @@
 </button>
 
 </div>
+
+<div id="estadoOffline" class="mensajeCentro oculto"></div>
   
   <div class="encabezadoApp" id="filaFactura">
   <span id="textoFacturaActual"></span>
@@ -1031,6 +1042,11 @@ document.getElementById("botonUbicaciones")
     !(esSupervisor || esAdministrador)
   );
 
+document.getElementById("botonPrepararOffline")
+  .classList.toggle("oculto", !esCobrador);
+
+actualizarEstadoOffline();
+
   document.getElementById("botonFacturas")
     .classList.toggle("oculto", !(esContador || esAdministrador));
   document.getElementById("filaFactura")
@@ -1061,7 +1077,213 @@ document.getElementById("botonUbicaciones")
   inicializarFechaAvance();
   actualizarPantallaPrincipal();
 }
+const CLAVE_PAQUETE_OFFLINE = "paqueteTrabajoOfflineV1";
 
+function formatearFechaOffline(fecha) {
+  return new Date(fecha).toLocaleString("es-SV", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function obtenerPaqueteOffline() {
+  try {
+    const texto = localStorage.getItem(CLAVE_PAQUETE_OFFLINE);
+    const paquete = texto ? JSON.parse(texto) : null;
+
+    if (!paquete || !Array.isArray(paquete.clientes) ||
+        !Array.isArray(paquete.precios) ||
+        !Array.isArray(paquete.facturas)) {
+      return null;
+    }
+
+    return paquete;
+  } catch (error) {
+    return null;
+  }
+}
+
+function actualizarEstadoOffline() {
+  const estado = document.getElementById("estadoOffline");
+
+  if (!estado) return;
+
+  if (sesion.rol !== "Cobrador") {
+    estado.classList.add("oculto");
+    estado.textContent = "";
+    return;
+  }
+
+  const paquete = obtenerPaqueteOffline();
+
+  if (
+    !paquete ||
+    paquete.usuario !== sesion.usuario ||
+    paquete.zona !== sesion.zona
+  ) {
+    estado.classList.remove("oculto");
+    estado.style.color = "#a15c00";
+    estado.textContent =
+      "Aún no preparaste la información para trabajar sin conexión.";
+    return;
+  }
+
+  estado.classList.remove("oculto");
+  estado.style.color = "#0f6b3a";
+  estado.textContent =
+    "Listo sin conexión · " +
+    formatearFechaOffline(paquete.preparadoEn) +
+    " · Clientes: " + paquete.clientes.length +
+    " · Precios: " + paquete.precios.length +
+    " · Facturas: " + paquete.facturas.length;
+}
+
+async function prepararTrabajoOffline() {
+  const boton = document.getElementById("botonPrepararOffline");
+  const estado = document.getElementById("estadoOffline");
+
+  if (sesion.rol !== "Cobrador") {
+    alert("Solo el Cobrador puede preparar trabajo sin conexión.");
+    return;
+  }
+
+  if (!sesion.usuario || !sesion.zona) {
+    alert("No se encontró el usuario o la zona de la sesión.");
+    return;
+  }
+
+  if (!sesion.inspector1 || !sesion.inspector2) {
+    alert(
+      "Primero selecciona los dos inspectores y la factura inicial."
+    );
+    return;
+  }
+
+  if (!navigator.onLine) {
+    estado.classList.remove("oculto");
+    estado.style.color = "#c00000";
+    estado.textContent =
+      "No hay señal. Conéctate antes de preparar la información.";
+    return;
+  }
+
+  boton.disabled = true;
+  boton.textContent = "Preparando...";
+
+  estado.classList.remove("oculto");
+  estado.style.color = "#555";
+  estado.textContent =
+    "Descargando clientes, precios y facturas asignadas...";
+
+  try {
+    const [clientes, precios, respuestaFacturas] = await Promise.all([
+      llamarBackend("clientesParaCobro", { zona: sesion.zona }),
+      llamarBackend("precios", {}),
+      llamarBackend("facturasDisponibles", {})
+    ]);
+
+    if (!Array.isArray(clientes)) {
+      throw new Error(
+        clientes?.mensaje ||
+        "No se pudo descargar la lista de clientes."
+      );
+    }
+
+    if (!Array.isArray(precios)) {
+      throw new Error(
+        precios?.mensaje ||
+        "No se pudo descargar la tabla de precios."
+      );
+    }
+
+    if (
+      !respuestaFacturas ||
+      !respuestaFacturas.exito ||
+      !Array.isArray(respuestaFacturas.disponibles)
+    ) {
+      throw new Error(
+        respuestaFacturas?.mensaje ||
+        "No se pudieron descargar las facturas asignadas."
+      );
+    }
+
+    if (respuestaFacturas.disponibles.length === 0) {
+      throw new Error(
+        "Tu usuario no tiene facturas disponibles asignadas."
+      );
+    }
+
+    const paquete = {
+      version: 1,
+      preparadoEn: new Date().toISOString(),
+      usuario: sesion.usuario,
+      zona: sesion.zona,
+      inspector1: sesion.inspector1,
+      inspector2: sesion.inspector2,
+      facturaActual: sesion.facturaActual || "",
+      clientes,
+      precios,
+      facturas: respuestaFacturas.disponibles.map(String)
+    };
+
+    localStorage.setItem(
+      CLAVE_PAQUETE_OFFLINE,
+      JSON.stringify(paquete)
+    );
+
+    const verificado = obtenerPaqueteOffline();
+
+    if (
+      !verificado ||
+      verificado.usuario !== sesion.usuario ||
+      verificado.clientes.length !== clientes.length ||
+      verificado.precios.length !== precios.length ||
+      verificado.facturas.length !== respuestaFacturas.disponibles.length
+    ) {
+      throw new Error(
+        "No se pudo verificar la copia guardada en este teléfono."
+      );
+    }
+
+    localStorage.setItem(
+      "clientesParaCobro",
+      JSON.stringify(clientes)
+    );
+
+    localStorage.setItem(
+      "listaPrecios",
+      JSON.stringify(precios)
+    );
+
+    clientesCargados = clientes;
+    listaPrecios = precios;
+
+    estado.style.color = "#0f6b3a";
+    estado.textContent =
+      "Información lista sin conexión · Clientes: " +
+      clientes.length +
+      " · Precios: " + precios.length +
+      " · Facturas: " + respuestaFacturas.disponibles.length;
+
+    actualizarEstadoOffline();
+
+  } catch (error) {
+    console.error("Error al preparar trabajo offline:", error);
+
+    estado.style.color = "#c00000";
+    estado.textContent =
+      "Preparación incompleta: " +
+      (error.message || "No se pudieron descargar los datos.") +
+      " No salgas sin señal.";
+
+  } finally {
+    boton.disabled = false;
+    boton.textContent = "Preparar sin conexión";
+  }
+}
 
 function obtenerFechaLocalISO(fecha = new Date()) {
   const compensacion = fecha.getTimezoneOffset() * 60000;
