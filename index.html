@@ -2406,69 +2406,109 @@ function pintarMapaUbicaciones(ubicaciones) {
     const lat = Number(item.latitud);
     const lon = Number(item.longitud);
     return Number.isFinite(lat) && Number.isFinite(lon) &&
-           lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+           lat >= -90 && lat <= 90 &&
+           lon >= -180 && lon <= 180;
   });
 
   if (!puntos.length) return;
 
   if (typeof L === "undefined") {
-    mensaje.textContent = "No se pudo cargar el mapa. Usa los enlaces individuales de abajo.";
+    mensaje.textContent =
+      "No se pudo cargar el mapa. Usa los enlaces individuales de abajo.";
     mensaje.classList.remove("oculto");
     return;
   }
 
   try {
-    contenedor.classList.remove("oculto");
-
-    mapaUbicaciones = L.map(contenedor);
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-    }).addTo(mapaUbicaciones);
-
-    marcadoresUbicaciones = L.featureGroup().addTo(mapaUbicaciones);
+    const grupos = new Map();
 
     puntos.forEach(item => {
       const lat = Number(item.latitud);
       const lon = Number(item.longitud);
-      const nombre = escaparHtml(item.cliente);
-      const codigo = escaparHtml(item.codigo);
-      const hora = escaparHtml(item.hora);
-      const pareja = escaparHtml(item.pareja);
-      const monto = Number(item.monto || 0).toFixed(2);
+      const clave = `${lat},${lon}`;
 
-      L.marker([lat, lon])
-        .bindPopup(
-          `<strong>${nombre}</strong><br>` +
-          `Código: ${codigo}<br>` +
-          `Hora: ${hora}<br>` +
-          `Pareja: ${pareja}<br>` +
-          `Monto: $${monto}`
-        )
-        .addTo(marcadoresUbicaciones);
+      if (!grupos.has(clave)) {
+        grupos.set(clave, { lat, lon, cobros: [] });
+      }
+
+      grupos.get(clave).cobros.push(item);
     });
 
-    if (puntos.length === 1) {
-      mapaUbicaciones.setView(
-        [Number(puntos[0].latitud), Number(puntos[0].longitud)],
-        16
-      );
+    contenedor.classList.remove("oculto");
+
+    mapaUbicaciones = L.map(contenedor);
+
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(mapaUbicaciones);
+
+    marcadoresUbicaciones = L.featureGroup().addTo(mapaUbicaciones);
+
+    grupos.forEach(grupo => {
+      const cantidad = grupo.cobros.length;
+
+      const detalles = grupo.cobros.map(item => {
+        const nombre = escaparHtml(item.cliente);
+        const codigo = escaparHtml(item.codigo);
+        const hora = escaparHtml(item.hora);
+        const pareja = escaparHtml(item.pareja);
+        const monto = Number(item.monto || 0).toFixed(2);
+
+        return (
+          `<div style="padding:6px 0;border-bottom:1px solid #ddd">` +
+            `<strong>${nombre}</strong><br>` +
+            `Código: ${codigo}<br>` +
+            `Hora: ${hora}<br>` +
+            `Pareja: ${pareja}<br>` +
+            `Monto: $${monto}` +
+          `</div>`
+        );
+      }).join("");
+
+      const titulo = cantidad === 1
+        ? "1 cobro en este lugar"
+        : `${cantidad} cobros en este lugar`;
+
+      L.marker([grupo.lat, grupo.lon])
+        .bindPopup(
+          `<div style="max-height:220px;overflow-y:auto">` +
+            `<strong>${titulo}</strong>` +
+            detalles +
+          `</div>`,
+          { maxWidth: 300 }
+        )
+        .addTo(marcadoresUbicaciones)
+        .bindTooltip(
+          cantidad === 1 ? "1 cobro" : `${cantidad} cobros`
+        );
+    });
+
+    if (grupos.size === 1) {
+      const unico = grupos.values().next().value;
+      mapaUbicaciones.setView([unico.lat, unico.lon], 16);
     } else {
-      mapaUbicaciones.fitBounds(marcadoresUbicaciones.getBounds().pad(0.2), {
-        maxZoom: 16
-      });
+      mapaUbicaciones.fitBounds(
+        marcadoresUbicaciones.getBounds().pad(0.2),
+        { maxZoom: 16 }
+      );
     }
 
     setTimeout(() => {
       if (mapaUbicaciones) mapaUbicaciones.invalidateSize();
     }, 100);
+
   } catch (error) {
     console.error("Error al mostrar el mapa:", error);
+
     if (mapaUbicaciones) mapaUbicaciones.remove();
+
     mapaUbicaciones = null;
     marcadoresUbicaciones = null;
     contenedor.classList.add("oculto");
-    mensaje.textContent = "No se pudo mostrar el mapa. Usa los enlaces individuales de abajo.";
+    mensaje.textContent =
+      "No se pudo mostrar el mapa. Usa los enlaces individuales de abajo.";
     mensaje.classList.remove("oculto");
   }
 }
