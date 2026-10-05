@@ -263,12 +263,26 @@
     background: #eee;
     color: #555;
   }
-  .botonLiberarUno {
+    .botonLiberarUno {
     width: auto;
     padding: 6px 14px;
     font-size: 13px;
     margin-top: 8px;
     background: #1F4E78;
+  }
+</style>
+
+<link rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin="">
+
+<style>
+  #mapaUbicaciones {
+    width: 100%;
+    height: 360px;
+    margin: 10px 0;
+    border-radius: 6px;
   }
 </style>
 </head>
@@ -425,6 +439,10 @@
   </div>
 </div>
 
+
+
+
+
 <div id="pantallaUbicaciones" class="oculto">
   <button onclick="cerrarUbicaciones()" class="botonVolver">
     ← Volver a la lista
@@ -437,6 +455,9 @@
     <div class="nombre">Ubicaciones de cobros</div>
     <div class="fila" id="textoFechaUbicaciones"></div>
   </div>
+
+<div id="mapaUbicaciones" class="oculto"></div>
+<div id="mensajeMapaUbicaciones" class="mensajeCentro oculto"></div>
 
   <div id="cargandoUbicaciones" class="mensajeCentro">
     Cargando ubicaciones...
@@ -621,6 +642,10 @@
     <button onclick="guardarCobro()" id="botonGuardarCobro">Guardar cobro</button>
   </div>
 </div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
 
 <script>
 // Reemplaza esto con la URL /exec de tu Apps Script
@@ -2358,6 +2383,97 @@ async function guardarRangoFacturas() {
     boton.textContent = "Guardar rango";
   }
 }
+
+
+let mapaUbicaciones = null;
+let marcadoresUbicaciones = null;
+
+function pintarMapaUbicaciones(ubicaciones) {
+  const contenedor = document.getElementById("mapaUbicaciones");
+  const mensaje = document.getElementById("mensajeMapaUbicaciones");
+
+  contenedor.classList.add("oculto");
+  mensaje.classList.add("oculto");
+  mensaje.textContent = "";
+
+  if (mapaUbicaciones) {
+    mapaUbicaciones.remove();
+    mapaUbicaciones = null;
+    marcadoresUbicaciones = null;
+  }
+
+  const puntos = ubicaciones.filter(item => {
+    const lat = Number(item.latitud);
+    const lon = Number(item.longitud);
+    return Number.isFinite(lat) && Number.isFinite(lon) &&
+           lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+  });
+
+  if (!puntos.length) return;
+
+  if (typeof L === "undefined") {
+    mensaje.textContent = "No se pudo cargar el mapa. Usa los enlaces individuales de abajo.";
+    mensaje.classList.remove("oculto");
+    return;
+  }
+
+  try {
+    contenedor.classList.remove("oculto");
+
+    mapaUbicaciones = L.map(contenedor);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(mapaUbicaciones);
+
+    marcadoresUbicaciones = L.featureGroup().addTo(mapaUbicaciones);
+
+    puntos.forEach(item => {
+      const lat = Number(item.latitud);
+      const lon = Number(item.longitud);
+      const nombre = escaparHtml(item.cliente);
+      const codigo = escaparHtml(item.codigo);
+      const hora = escaparHtml(item.hora);
+      const pareja = escaparHtml(item.pareja);
+      const monto = Number(item.monto || 0).toFixed(2);
+
+      L.marker([lat, lon])
+        .bindPopup(
+          `<strong>${nombre}</strong><br>` +
+          `Código: ${codigo}<br>` +
+          `Hora: ${hora}<br>` +
+          `Pareja: ${pareja}<br>` +
+          `Monto: $${monto}`
+        )
+        .addTo(marcadoresUbicaciones);
+    });
+
+    if (puntos.length === 1) {
+      mapaUbicaciones.setView(
+        [Number(puntos[0].latitud), Number(puntos[0].longitud)],
+        16
+      );
+    } else {
+      mapaUbicaciones.fitBounds(marcadoresUbicaciones.getBounds().pad(0.2), {
+        maxZoom: 16
+      });
+    }
+
+    setTimeout(() => {
+      if (mapaUbicaciones) mapaUbicaciones.invalidateSize();
+    }, 100);
+  } catch (error) {
+    console.error("Error al mostrar el mapa:", error);
+    if (mapaUbicaciones) mapaUbicaciones.remove();
+    mapaUbicaciones = null;
+    marcadoresUbicaciones = null;
+    contenedor.classList.add("oculto");
+    mensaje.textContent = "No se pudo mostrar el mapa. Usa los enlaces individuales de abajo.";
+    mensaje.classList.remove("oculto");
+  }
+}
+
+
 async function abrirUbicaciones() {
   const permitido = [
     "Supervisor",
@@ -2411,7 +2527,8 @@ async function abrirUbicaciones() {
       );
     }
 
-    const ubicaciones = resultado.ubicaciones || [];
+    const ubicaciones = resultado.ubicaciones;
+pintarMapaUbicaciones(ubicaciones);
 
     if (ubicaciones.length === 0) {
       lista.innerHTML =
@@ -2475,13 +2592,16 @@ async function abrirUbicaciones() {
 }
 
 function cerrarUbicaciones() {
-  document.getElementById("pantallaUbicaciones")
-    .classList
-    .add("oculto");
+  if (mapaUbicaciones) {
+    mapaUbicaciones.remove();
+    mapaUbicaciones = null;
+    marcadoresUbicaciones = null;
+  }
 
-  document.getElementById("pantallaPrincipal")
-    .classList
-    .remove("oculto");
+  document.getElementById("mapaUbicaciones").classList.add("oculto");
+  document.getElementById("mensajeMapaUbicaciones").classList.add("oculto");
+  document.getElementById("pantallaUbicaciones").classList.add("oculto");
+  document.getElementById("pantallaPrincipal").classList.remove("oculto");
 }
 </script>
 
