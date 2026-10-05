@@ -922,7 +922,10 @@ async function cambiarFacturaInicial() {
   let disponibles;
 
   try {
-    const r = await llamarBackend("facturasDisponibles", {});
+    const r = await llamarBackend("facturasDisponibles", {
+  inspector1: sesion.inspector1,
+  inspector2: sesion.inspector2
+});
     if (!r.exito) throw new Error(r.mensaje);
     disponibles = r.disponibles;
   } catch (err) {
@@ -2144,6 +2147,8 @@ const ubicacion = await obtenerUbicacionActual();
 
   // Seguridad: este usuario se valida en Apps Script.
   usuarioLogin: sesion.usuario,
+inspector1: sesion.inspector1,
+inspector2: sesion.inspector2,
 
   // Historial y avance: la pareja de inspectores.
   usuario: parejaInspectores,
