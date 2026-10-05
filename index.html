@@ -476,32 +476,41 @@
     <h2>Rangos de facturas</h2>
 
     <label class="etiquetaCampo" for="facturaZona">Zona</label>
-    <select id="facturaZona"
-            onchange="cargarInspectoresFacturas(); cargarRangosFacturas();">
+    <select id="facturaZona" onchange="cargarUsuariosCobradores(); cargarRangosFacturas();">
       <option value="">Selecciona una zona</option>
       <option value="Santa Ana">Santa Ana</option>
       <option value="Ahuachapan">Ahuachapan</option>
       <option value="Sonsonate">Sonsonate</option>
     </select>
 
-    <label class="etiquetaCampo" for="facturaInspector1">Inspector 1</label>
-    <select id="facturaInspector1"></select>
+    <label class="etiquetaCampo" for="facturaUsuarioCobrador">
+      Usuario Cobrador
+    </label>
+    <select id="facturaUsuarioCobrador"></select>
 
-    <label class="etiquetaCampo" for="facturaInspector2">Inspector 2</label>
-    <select id="facturaInspector2"></select>
+    <label class="etiquetaCampo" for="facturaRangoInicio">
+      Número inicial
+    </label>
+    <input id="facturaRangoInicio" type="number"
+           min="1" step="1" inputmode="numeric">
 
-    <label class="etiquetaCampo" for="facturaRangoInicio">Número inicial</label>
-    <input id="facturaRangoInicio" type="number" min="1" step="1" inputmode="numeric">
-
-    <label class="etiquetaCampo" for="facturaRangoFin">Número final</label>
-    <input id="facturaRangoFin" type="number" min="1" step="1" inputmode="numeric">
+    <label class="etiquetaCampo" for="facturaRangoFin">
+      Número final
+    </label>
+    <input id="facturaRangoFin" type="number"
+           min="1" step="1" inputmode="numeric">
 
     <div id="errorRangoFacturas" class="error" role="status"></div>
+
     <button id="botonGuardarRangoFacturas" type="button"
-            onclick="guardarRangoFacturas()">Guardar rango</button>
+            onclick="guardarRangoFacturas()">
+      Guardar rango
+    </button>
   </div>
 
-  <div id="estadoRangosFacturas" class="mensajeCentro" role="status"></div>
+  <div id="estadoRangosFacturas"
+       class="mensajeCentro" role="status"></div>
+
   <div id="listaRangosFacturas"></div>
 </div>
 <!-- PANTALLA PARA LIBERAR CLIENTES -->
@@ -879,10 +888,7 @@ async function cargarFacturasInicio() {
   info.textContent = "Cargando facturas disponibles...";
 
   try {
-    const r = await llamarBackend("facturasDisponibles", {
-  inspector1: sesion.inspector1,
-  inspector2: sesion.inspector2
-});
+    const r = await llamarBackend("facturasDisponibles", {});
 
     if (!r.exito) throw new Error(r.mensaje || "No se pudieron cargar las facturas.");
 
@@ -922,10 +928,7 @@ async function cambiarFacturaInicial() {
   let disponibles;
 
   try {
-    const r = await llamarBackend("facturasDisponibles", {
-  inspector1: sesion.inspector1,
-  inspector2: sesion.inspector2
-});
+    const r = await llamarBackend("facturasDisponibles", {});
     if (!r.exito) throw new Error(r.mensaje);
     disponibles = r.disponibles;
   } catch (err) {
@@ -2315,37 +2318,39 @@ function zonaDeFacturas() {
     : document.getElementById("facturaZona").value;
 }
 
-async function cargarInspectoresFacturas() {
-  const a = document.getElementById("facturaInspector1");
-  const b = document.getElementById("facturaInspector2");
-  a.replaceChildren();
-  b.replaceChildren();
+async function cargarUsuariosCobradores() {
+  const select = document.getElementById("facturaUsuarioCobrador");
+  select.replaceChildren();
 
   const zona = zonaDeFacturas();
   if (!zona) return;
 
   try {
-    const nombres = await llamarBackend("inspectores", { zona });
-    if (!Array.isArray(nombres)) throw new Error("Lista de inspectores inválida");
+    const usuarios = await llamarBackend("usuariosCobradores", { zona });
 
-    for (const select of [a, b]) {
-      const vacio = document.createElement("option");
-      vacio.value = "";
-      vacio.textContent = "Selecciona inspector";
-      select.appendChild(vacio);
-
-      nombres.forEach(nombre => {
-        const opcion = document.createElement("option");
-        opcion.value = nombre;
-        opcion.textContent = nombre;
-        select.appendChild(opcion);
-      });
+    if (!Array.isArray(usuarios)) {
+      throw new Error("La lista de cobradores no es válida.");
     }
+
+    const vacio = document.createElement("option");
+    vacio.value = "";
+    vacio.textContent = "Selecciona usuario cobrador";
+    select.appendChild(vacio);
+
+    usuarios.forEach(usuario => {
+      const opcion = document.createElement("option");
+      opcion.value = usuario;
+      opcion.textContent = usuario;
+      select.appendChild(opcion);
+    });
+
   } catch (err) {
     document.getElementById("errorRangoFacturas").textContent =
-      "No se pudieron cargar inspectores: " + err.message;
+      "No se pudieron cargar usuarios cobradores: " +
+      (err.message || "error desconocido");
   }
 }
+
 
 function abrirPantallaFacturas() {
   if (!["Contador", "Administrador"].includes(sesion.rol)) {
@@ -2363,11 +2368,14 @@ function abrirPantallaFacturas() {
   document.getElementById("pantallaPrincipal").classList.add("oculto");
   document.getElementById("pantallaFacturas").classList.remove("oculto");
   if (zonaDeFacturas()) {
-  cargarInspectoresFacturas();
+  cargarUsuariosCobradores();
   cargarRangosFacturas();
 }
   else document.getElementById("estadoRangosFacturas").textContent = "Selecciona una zona para consultar rangos.";
 }
+
+
+
 
 function cerrarPantallaFacturas() {
   document.getElementById("pantallaFacturas").classList.add("oculto");
@@ -2423,12 +2431,12 @@ async function cargarRangosFacturas() {
         " · Usadas: " + item.usadas +
         " · Disponibles: " + item.disponibles;
 
-      const pareja = document.createElement("div");
-      pareja.className = "fila";
-      pareja.textContent = "Pareja: " +
-        (item.inspector1 && item.inspector2
-          ? item.inspector1 + " / " + item.inspector2
-          : "Sin asignar");
+ const cobrador = document.createElement("div");
+cobrador.className = "fila";
+cobrador.textContent = "Usuario Cobrador: " +
+  (item.usuarioCobrador || "Sin asignar");
+
+tarjeta.append(nombre, detalle, cobrador);
 
       tarjeta.append(nombre, detalle, pareja);
       lista.appendChild(tarjeta);
@@ -2446,12 +2454,22 @@ async function guardarRangoFacturas() {
   if (!["Contador", "Administrador"].includes(sesion.rol)) return;
 
   const zona = zonaDeFacturas();
-  const inicioTexto = document.getElementById("facturaRangoInicio").value.trim();
-  const finTexto = document.getElementById("facturaRangoFin").value.trim();
+  const usuarioCobrador = document
+    .getElementById("facturaUsuarioCobrador")
+    .value;
+
+  const inicioTexto = document
+    .getElementById("facturaRangoInicio")
+    .value
+    .trim();
+
+  const finTexto = document
+    .getElementById("facturaRangoFin")
+    .value
+    .trim();
+
   const inicio = Number(inicioTexto);
   const fin = Number(finTexto);
-  const inspector1 = document.getElementById("facturaInspector1").value;
-  const inspector2 = document.getElementById("facturaInspector2").value;
   const error = document.getElementById("errorRangoFacturas");
   const boton = document.getElementById("botonGuardarRangoFacturas");
 
@@ -2462,25 +2480,28 @@ async function guardarRangoFacturas() {
     return;
   }
 
-  if (!inspector1 || !inspector2 || inspector1 === inspector2) {
-    error.textContent = "Selecciona dos inspectores distintos.";
+  if (!usuarioCobrador) {
+    error.textContent = "Selecciona el usuario Cobrador.";
     return;
   }
 
   if (
     !inicioTexto || !finTexto ||
-    !Number.isSafeInteger(inicio) || !Number.isSafeInteger(fin) ||
-    inicio <= 0 || fin < inicio || fin - inicio + 1 > 5000
+    !Number.isSafeInteger(inicio) ||
+    !Number.isSafeInteger(fin) ||
+    inicio <= 0 ||
+    fin < inicio ||
+    fin - inicio + 1 > 5000
   ) {
     error.textContent =
-      "Indica enteros positivos; el final no puede ser menor " +
-      "y el rango no puede superar 5000 facturas.";
+      "Indica números enteros positivos y un rango válido.";
     return;
   }
 
   if (!confirm(
-    "¿Asignar a " + inspector1 + " / " + inspector2 +
-    " de " + zona + " el rango " + inicio + "–" + fin + "?"
+    "¿Asignar a " + usuarioCobrador +
+    " de " + zona +
+    " el rango " + inicio + "–" + fin + "?"
   )) return;
 
   boton.disabled = true;
@@ -2488,7 +2509,10 @@ async function guardarRangoFacturas() {
 
   try {
     const r = await llamarBackend("guardarRangoFacturas", {
-      zona, inicio, fin, inspector1, inspector2
+      zona,
+      inicio,
+      fin,
+      usuarioCobrador
     });
 
     if (!r || !r.exito) {
@@ -2498,6 +2522,7 @@ async function guardarRangoFacturas() {
 
     document.getElementById("facturaRangoInicio").value = "";
     document.getElementById("facturaRangoFin").value = "";
+
     await cargarRangosFacturas();
 
   } catch (err) {
@@ -2510,7 +2535,6 @@ async function guardarRangoFacturas() {
     boton.textContent = "Guardar rango";
   }
 }
-
 
 let mapaUbicaciones = null;
 let marcadoresUbicaciones = null;
