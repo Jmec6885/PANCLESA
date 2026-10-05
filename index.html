@@ -344,6 +344,15 @@
     Preparar sin conexión
   </button>
 
+<button
+  id="botonPendientesOffline"
+  class="accionPrincipal oculto"
+  onclick="abrirPendientesOffline()"
+  style="background:#c05a00;"
+>
+  Pendientes: 0
+</button>
+
   <button
     id="botonAgregarCliente"
     class="accionPrincipal accionAgregar oculto"
@@ -388,6 +397,22 @@
 </div>
 
 <div id="estadoOffline" class="mensajeCentro oculto"></div>
+
+
+<!-- PANTALLA DE PENDIENTES OFFLINE -->
+<div id="pantallaPendientesOffline" class="oculto">
+  <button type="button" class="botonVolver"
+          onclick="cerrarPendientesOffline()">
+    ← Volver a la lista
+  </button>
+
+  <div class="tarjetaCliente">
+    <div class="nombre">Cobros pendientes de sincronizar</div>
+    <div class="fila" id="textoPendientesOffline"></div>
+  </div>
+
+  <div id="listaPendientesOffline"></div>
+</div>
   
   <div class="encabezadoApp" id="filaFactura">
   <span id="textoFacturaActual"></span>
@@ -1047,6 +1072,12 @@ document.getElementById("botonPrepararOffline")
 
 actualizarEstadoOffline();
 
+
+document.getElementById("botonPendientesOffline")
+  .classList.toggle("oculto", !esCobrador);
+
+actualizarContadorPendientesOffline();
+
   document.getElementById("botonFacturas")
     .classList.toggle("oculto", !(esContador || esAdministrador));
   document.getElementById("filaFactura")
@@ -1076,6 +1107,198 @@ actualizarEstadoOffline();
   actualizarTextoFactura();
   inicializarFechaAvance();
   actualizarPantallaPrincipal();
+}
+
+const NOMBRE_BD_OFFLINE = "cobrosOfflineDB";
+const VERSION_BD_OFFLINE = 1;
+const TABLA_PENDIENTES_OFFLINE = "pendientes";
+
+function abrirBaseOffline() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) {
+      reject(new Error("Este navegador no soporta almacenamiento offline."));
+      return;
+    }
+
+    const solicitud = indexedDB.open(
+      NOMBRE_BD_OFFLINE,
+      VERSION_BD_OFFLINE
+    );
+
+    solicitud.onupgradeneeded = () => {
+      const bd = solicitud.result;
+
+      if (!bd.objectStoreNames.contains(TABLA_PENDIENTES_OFFLINE)) {
+        const tabla = bd.createObjectStore(
+          TABLA_PENDIENTES_OFFLINE,
+          { keyPath: "idCobro" }
+        );
+
+        tabla.createIndex("usuario", "usuario", { unique: false });
+        tabla.createIndex("estado", "estado", { unique: false });
+        tabla.createIndex("creadoEn", "creadoEn", { unique: false });
+      }
+    };
+
+    solicitud.onsuccess = () => resolve(solicitud.result);
+
+    solicitud.onerror = () => {
+      reject(
+        solicitud.error ||
+        new Error("No se pudo abrir la base local.")
+      );
+    };
+  });
+}
+
+async function obtenerPendientesOffline() {
+  const bd = await abrirBaseOffline();
+
+  return new Promise((resolve, reject) => {
+    const transaccion = bd.transaction(
+      TABLA_PENDIENTES_OFFLINE,
+      "readonly"
+    );
+
+    const tabla = transaccion.objectStore(TABLA_PENDIENTES_OFFLINE);
+    const solicitud = tabla.getAll();
+
+    solicitud.onsuccess = () => {
+      const todos = Array.isArray(solicitud.result)
+        ? solicitud.result
+        : [];
+
+      const propios = todos
+        .filter(item =>
+          item.usuario === sesion.usuario &&
+          item.zona === sesion.zona
+        )
+        .sort((a, b) =>
+          new Date(a.creadoEn) - new Date(b.creadoEn)
+        );
+
+      resolve(propios);
+    };
+
+    solicitud.onerror = () => {
+      reject(
+        solicitud.error ||
+        new Error("No se pudieron leer los pendientes.")
+      );
+    };
+
+    transaccion.oncomplete = () => bd.close();
+  });
+}
+
+async function actualizarContadorPendientesOffline() {
+  const boton = document.getElementById(
+    "botonPendientesOffline"
+  );
+
+  if (!boton || sesion.rol !== "Cobrador") return;
+
+  try {
+    const pendientes = await obtenerPendientesOffline();
+    boton.textContent = "Pendientes: " + pendientes.length;
+  } catch (error) {
+    console.error(
+      "No se pudo contar pendientes offline:",
+      error
+    );
+    boton.textContent = "Pendientes: ?";
+  }
+}
+
+async function abrirPendientesOffline() {
+  if (sesion.rol !== "Cobrador") {
+    alert("Solo el Cobrador puede consultar pendientes.");
+    return;
+  }
+
+  document.getElementById("pantallaPrincipal")
+    .classList.add("oculto");
+
+  document.getElementById("pantallaPendientesOffline")
+    .classList.remove("oculto");
+
+  const texto = document.getElementById(
+    "textoPendientesOffline"
+  );
+
+  const lista = document.getElementById(
+    "listaPendientesOffline"
+  );
+
+  texto.textContent = "Cargando pendientes...";
+  lista.innerHTML = "";
+
+  try {
+    const pendientes = await obtenerPendientesOffline();
+
+    texto.textContent =
+      "Pendientes en este teléfono: " + pendientes.length;
+
+    if (!pendientes.length) {
+      lista.innerHTML =
+        '<div class="mensajeCentro">' +
+        "No hay cobros pendientes de sincronizar." +
+        "</div>";
+      return;
+    }
+
+    pendientes.forEach(item => {
+      const tarjeta = document.createElement("div");
+      tarjeta.className = "tarjetaCliente";
+
+      const fecha = item.creadoEn
+        ? formatearFechaOffline(item.creadoEn)
+        : "-";
+
+      tarjeta.innerHTML =
+        '<div class="codigo">ID: ' +
+          escaparHtml(item.idCobro) +
+        "</div>" +
+        '<div class="nombre">' +
+          escaparHtml(item.nombreCliente || "Cliente") +
+        "</div>" +
+        '<div class="fila">' +
+          '<span class="etiqueta">Código:</span> ' +
+          escaparHtml(item.codigo || "-") +
+        "</div>" +
+        '<div class="fila">' +
+          '<span class="etiqueta">Factura:</span> ' +
+          escaparHtml(item.numeroFactura || "-") +
+        "</div>" +
+        '<div class="fila">' +
+          '<span class="etiqueta">Estado local:</span> ' +
+          escaparHtml(item.estado || "PENDIENTE") +
+        "</div>" +
+        '<div class="fila">' +
+          '<span class="etiqueta">Guardado:</span> ' +
+          escaparHtml(fecha) +
+        "</div>";
+
+      lista.appendChild(tarjeta);
+    });
+
+  } catch (error) {
+    texto.textContent = "No se pudieron leer los pendientes.";
+    lista.innerHTML =
+      '<div class="mensajeCentro">' +
+      escaparHtml(error.message || "Error desconocido.") +
+      "</div>";
+  }
+}
+
+function cerrarPendientesOffline() {
+  document.getElementById("pantallaPendientesOffline")
+    .classList.add("oculto");
+
+  document.getElementById("pantallaPrincipal")
+    .classList.remove("oculto");
+
+  actualizarContadorPendientesOffline();
 }
 const CLAVE_PAQUETE_OFFLINE = "paqueteTrabajoOfflineV1";
 
