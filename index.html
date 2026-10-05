@@ -399,20 +399,7 @@
 <div id="estadoOffline" class="mensajeCentro oculto"></div>
 
 
-<!-- PANTALLA DE PENDIENTES OFFLINE -->
-<div id="pantallaPendientesOffline" class="oculto">
-  <button type="button" class="botonVolver"
-          onclick="cerrarPendientesOffline()">
-    ← Volver a la lista
-  </button>
 
-  <div class="tarjetaCliente">
-    <div class="nombre">Cobros pendientes de sincronizar</div>
-    <div class="fila" id="textoPendientesOffline"></div>
-  </div>
-
-  <div id="listaPendientesOffline"></div>
-</div>
   
   <div class="encabezadoApp" id="filaFactura">
   <span id="textoFacturaActual"></span>
@@ -475,7 +462,20 @@
   </div>
 </div>
 
+<!-- PANTALLA DE PENDIENTES OFFLINE -->
+<div id="pantallaPendientesOffline" class="oculto">
+  <button type="button" class="botonVolver"
+          onclick="cerrarPendientesOffline()">
+    ← Volver a la lista
+  </button>
 
+  <div class="tarjetaCliente">
+    <div class="nombre">Cobros pendientes de sincronizar</div>
+    <div class="fila" id="textoPendientesOffline"></div>
+  </div>
+
+  <div id="listaPendientesOffline"></div>
+</div>
 
 
 
@@ -1205,32 +1205,37 @@ async function guardarPendienteOffline(pendiente) {
   const bd = await abrirBaseOffline();
 
   return new Promise((resolve, reject) => {
-    const transaccion = bd.transaction(
-      TABLA_PENDIENTES_OFFLINE,
-      "readwrite"
-    );
+    let transaccion;
 
-    const tabla = transaccion.objectStore(TABLA_PENDIENTES_OFFLINE);
-
-    const solicitud = tabla.add(pendiente);
-
-    solicitud.onsuccess = () => resolve(pendiente);
-
-    solicitud.onerror = () => {
-      reject(
-        solicitud.error ||
-        new Error("No se pudo guardar el cobro pendiente.")
+    try {
+      transaccion = bd.transaction(
+        TABLA_PENDIENTES_OFFLINE,
+        "readwrite"
       );
-    };
 
-    transaccion.oncomplete = () => bd.close();
+      transaccion
+        .objectStore(TABLA_PENDIENTES_OFFLINE)
+        .add(pendiente);
 
-    transaccion.onerror = () => {
-      reject(
-        transaccion.error ||
-        new Error("Falló la transacción local.")
-      );
-    };
+      transaccion.oncomplete = () => {
+        bd.close();
+        resolve(pendiente);
+      };
+
+      transaccion.onabort = () => {
+        const error = transaccion.error ||
+          new Error("No se confirmó el guardado local.");
+        bd.close();
+        reject(error);
+      };
+
+      transaccion.onerror = () => {
+        // El rechazo se maneja en onabort.
+      };
+    } catch (error) {
+      bd.close();
+      reject(error);
+    }
   });
 }
 
@@ -1253,7 +1258,7 @@ async function crearPendienteDesdeFormulario(
   fotoNotificacion
 ) {
   const pendiente = {
-    idCobro: generarIdCobroOffline(),
+    idCobro: datos.idCobro || generarIdCobroOffline(),
     estado: "PENDIENTE",
     creadoEn: new Date().toISOString(),
 
@@ -2607,27 +2612,32 @@ function obtenerUbicacionActual() {
 
 async function guardarCobro() {
   const errorDiv = document.getElementById("errorDetalle");
+  const boton = document.getElementById("botonGuardarCobro");
+
+  if (boton.disabled) return;
   errorDiv.textContent = "";
 
   if (sesion.rol !== "Cobrador") {
-    errorDiv.textContent =
-      "Tu rol no tiene permiso para registrar cobros.";
+    errorDiv.textContent = "Solo el Cobrador puede registrar cobros.";
+    return;
+  }
+
+  if (!clienteActual || !sesion.usuario || !sesion.zona) {
+    errorDiv.textContent = "No se identificó el cliente o la sesión.";
     return;
   }
 
   const estado = document.getElementById("detEstado").value;
-  const observaciones = document
-    .getElementById("detObservaciones")
-    .value
-    .trim();
+  const observaciones =
+    document.getElementById("detObservaciones").value.trim();
 
-  const inputFotoFactura =
-    document.getElementById("detFotoFactura");
-
-  const inputFotoNotificacion =
+  const fotoFacturaInput = document.getElementById("detFotoFactura");
+  const fotoNotificacionInput =
     document.getElementById("detFotoNotificacion");
 
-  if (!estado) {
+  const usaFactura = ["Cobro Total", "Cobro Parcial"].includes(estado);
+
+  if (!["Cobro Total", "Cobro Parcial", "Notificacion"].includes(estado)) {
     errorDiv.textContent = "Selecciona el estado del cobro.";
     return;
   }
@@ -2637,235 +2647,216 @@ async function guardarCobro() {
     return;
   }
 
-  if (!sesion.usuario || !sesion.zona) {
-    errorDiv.textContent =
-      "No se encontró el usuario o la zona de sesión.";
-    return;
-  }
-
-  if (!sesion.inspector1 || !sesion.inspector2) {
-    errorDiv.textContent =
-      "No se identificó la pareja de inspectores.";
-    return;
-  }
-
-  if (!sesion.facturaActual) {
-    errorDiv.textContent =
-      "No se identificó la factura actual.";
-    return;
-  }
-
   if (
-    (estado === "Cobro Total" || estado === "Cobro Parcial") &&
-    !inputFotoFactura.files.length
+    !sesion.inspector1 ||
+    !sesion.inspector2 ||
+    sesion.inspector1 === sesion.inspector2
   ) {
+    errorDiv.textContent = "Selecciona dos inspectores distintos al iniciar.";
+    return;
+  }
+
+  if (usaFactura && !sesion.facturaActual) {
+    errorDiv.textContent = "Selecciona una factura de tu talonario.";
+    return;
+  }
+
+  if (usaFactura && !fotoFacturaInput.files.length) {
     errorDiv.textContent = "Falta la foto de factura.";
     return;
   }
 
   if (
-    (estado === "Cobro Parcial" || estado === "Notificacion") &&
-    !inputFotoNotificacion.files.length
+    ["Cobro Parcial", "Notificacion"].includes(estado) &&
+    !fotoNotificacionInput.files.length
   ) {
     errorDiv.textContent = "Falta la foto de notificación.";
     return;
   }
 
-  const boton = document.getElementById("botonGuardarCobro");
   boton.disabled = true;
-  boton.textContent = "Guardando...";
+  boton.textContent = "Preparando cobro...";
 
   try {
-    const fotoFactura = await leerArchivoBase64(inputFotoFactura);
-    const fotoNotificacion = await leerArchivoBase64(
-      inputFotoNotificacion
-    );
+    const cliente = clienteActual;
+    const usuario = sesion.usuario;
+    const zona = sesion.zona;
 
-    const ubicacion = await obtenerUbicacionActual();
+    const pendientes = await obtenerPendientesOffline();
+    const numeroFactura = usaFactura ? String(sesion.facturaActual) : "";
+
+    if (pendientes.some(p => String(p.codigo) === String(cliente["CODIGO"]))) {
+      throw new Error(
+        "Este cliente ya tiene un cobro pendiente en este teléfono."
+      );
+    }
+
+    if (
+      numeroFactura &&
+      pendientes.some(p => String(p.numeroFactura) === numeroFactura)
+    ) {
+      throw new Error(
+        "La factura " + numeroFactura + " ya está en un pendiente local."
+      );
+    }
 
     const datos = {
-      codigo: clienteActual["CODIGO"],
-      estado: estado,
-      observaciones: observaciones,
-
-      usuarioLogin: sesion.usuario,
+      idCobro: generarIdCobroOffline(),
+      codigo: cliente["CODIGO"],
+      estado,
+      observaciones,
+      usuarioLogin: usuario,
       usuario: sesion.inspector1 + " / " + sesion.inspector2,
-
-      numeroFactura: sesion.facturaActual,
-      fotoFactura: fotoFactura,
-      fotoNotificacion: fotoNotificacion
+      numeroFactura,
+      fotoFactura: usaFactura
+        ? await leerArchivoBase64(fotoFacturaInput)
+        : null,
+      fotoNotificacion: ["Cobro Parcial", "Notificacion"].includes(estado)
+        ? await leerArchivoBase64(fotoNotificacionInput)
+        : null
     };
+
+    if (cliente["Medidor"]) {
+      const textoLectura = document.getElementById("detLecturaActual").value;
+      const lectura = Number(textoLectura);
+      const anterior = Number(cliente["Lectura Anterior"] || 0);
+
+      if (!textoLectura.trim() || !Number.isFinite(lectura) || lectura < anterior) {
+        throw new Error("Ingresa una lectura válida, no menor a la anterior.");
+      }
+
+      datos.lecturaActual = textoLectura;
+    } else {
+      const textoMonto = document.getElementById("detMontoFijo").value;
+      const monto = Number(textoMonto);
+
+      if (usaFactura && (!Number.isFinite(monto) || monto <= 0)) {
+        throw new Error("Ingresa una cuota fija válida.");
+      }
+
+      datos.montoFijo = textoMonto;
+    }
+
+    if (estado === "Cobro Parcial") {
+      const textoKw = document.getElementById("detKwCobrado").value;
+      const kw = Number(textoKw);
+
+      const base = cliente["Medidor"]
+        ? Number(datos.lecturaActual) -
+          Number(cliente["Lectura Anterior"] || 0) +
+          Number(cliente["Pte/KWH Meses Anteri."] || 0)
+        : Number(datos.montoFijo);
+
+      if (!Number.isFinite(kw) || kw <= 0 || kw > base) {
+        throw new Error("El cobro parcial debe ser mayor que cero y no superar el total.");
+      }
+
+      datos.kwCobrado = textoKw;
+    } else if (estado === "Notificacion") {
+      datos.kwCobrado = 0;
+    }
+
+    const ubicacion = await obtenerUbicacionActual();
 
     if (ubicacion.disponible) {
       datos.latitud = ubicacion.latitud;
       datos.longitud = ubicacion.longitud;
       datos.precisionGps = ubicacion.precisionGps;
-    } else {
-      const continuarSinGps = confirm(
-        "No se pudo obtener la ubicación GPS.\n\n" +
-        "Detalle: " +
-        (ubicacion.mensaje || "No disponible") +
-        "\n\n¿Deseas continuar sin GPS?"
-      );
+    } else if (!confirm(
+      "No se pudo obtener GPS.\n\n" +
+      (ubicacion.mensaje || "No disponible") +
+      "\n\n¿Continuar sin GPS?"
+    )) {
+      return;
+    }
 
-      if (!continuarSinGps) {
-        return;
+    if (sesion.usuario !== usuario || sesion.zona !== zona) {
+      throw new Error("La sesión cambió. No se enviará este cobro.");
+    }
+
+    let resultado = null;
+    let falloRed = null;
+
+    if (navigator.onLine) {
+      boton.textContent = "Enviando...";
+
+      try {
+        resultado = await llamarBackend("guardarCobro", datos);
+      } catch (error) {
+        if (!esErrorDeConexion(error)) throw error;
+        falloRed = error;
       }
     }
 
-    if (clienteActual["Medidor"]) {
-      datos.lecturaActual = document
-        .getElementById("detLecturaActual")
-        .value;
-    } else {
-      datos.montoFijo = document
-        .getElementById("detMontoFijo")
-        .value;
-    }
+    if (resultado) {
+      if (!resultado.exito) {
+        errorDiv.textContent =
+          resultado.mensaje || "El servidor rechazó el cobro.";
+        return;
+      }
 
-    if (estado === "Cobro Parcial") {
-      datos.kwCobrado = document
-        .getElementById("detKwCobrado")
-        .value;
+      if (resultado.idCobro !== datos.idCobro) {
+        throw new Error(
+          "El servidor no confirmó el mismo ID Cobro. " +
+          "Revisa Historial antes de reintentar."
+        );
+      }
 
-    } else if (estado === "Notificacion") {
-      datos.kwCobrado = 0;
-    }
+      if (usaFactura) {
+        sesion.facturaActual = resultado.siguienteFactura || null;
+      }
 
-    if (!navigator.onLine) {
-      const pendiente = await crearPendienteDesdeFormulario(
-        datos,
-        fotoFactura,
-        fotoNotificacion
-      );
+      localStorage.setItem("sesionApp", JSON.stringify(sesion));
+      actualizarTextoFactura();
 
       alert(
-        "Cobro guardado en este teléfono.\n\n" +
-        "Factura: " + pendiente.numeroFactura +
-        "\nEstado: pendiente de sincronizar."
+        "Cobro confirmado en el servidor." +
+        (numeroFactura ? "\nFactura: " + numeroFactura : "")
       );
-
-      sesion.facturaActual = null;
-      localStorage.setItem(
-        "sesionApp",
-        JSON.stringify(sesion)
-      );
-
-      actualizarTextoFactura();
-      await actualizarContadorPendientesOffline();
 
       cerrarDetalle();
+      cargarClientesParaCobro();
+      cargarAvanceDelDia();
+      atrasadosCargados = false;
       return;
     }
 
-    const resultado = await llamarBackend("guardarCobro", datos);
+    const pendiente = await crearPendienteDesdeFormulario(
+      datos,
+      datos.fotoFactura,
+      datos.fotoNotificacion
+    );
 
-    if (!resultado.exito) {
-      errorDiv.textContent =
-        resultado.mensaje || "No se pudo guardar el cobro.";
-      return;
+    if (usaFactura) {
+      sesion.facturaActual = null;
     }
+
+    localStorage.setItem("sesionApp", JSON.stringify(sesion));
+    actualizarTextoFactura();
+    await actualizarContadorPendientesOffline();
 
     alert(
-      "Cobro guardado." +
-      (resultado.numeroFactura
-        ? " N° Factura: " + resultado.numeroFactura
+      "Cobro guardado en este teléfono." +
+      (numeroFactura ? "\nFactura: " + numeroFactura : "") +
+      "\nPendiente de sincronizar." +
+      (falloRed
+        ? "\nEl envío anterior no pudo confirmarse; se conserva el mismo ID."
         : "")
     );
 
-    sesion.facturaActual = resultado.siguienteFactura || null;
-
-    localStorage.setItem(
-      "sesionApp",
-      JSON.stringify(sesion)
-    );
-
-    actualizarTextoFactura();
-
     cerrarDetalle();
-    cargarClientesParaCobro();
-    cargarAvanceDelDia();
-
-    atrasadosCargados = false;
 
   } catch (error) {
     console.error("Error al guardar cobro:", error);
-
-    if (esErrorDeConexion(error)) {
-      try {
-        const fotoFactura = await leerArchivoBase64(inputFotoFactura);
-        const fotoNotificacion = await leerArchivoBase64(
-          inputFotoNotificacion
-        );
-
-        const datosRespaldo = {
-          codigo: clienteActual["CODIGO"],
-          estado: estado,
-          observaciones: observaciones,
-          usuarioLogin: sesion.usuario,
-          usuario: sesion.inspector1 + " / " + sesion.inspector2,
-          numeroFactura: sesion.facturaActual,
-
-          lecturaActual: clienteActual["Medidor"]
-            ? document.getElementById("detLecturaActual").value
-            : "",
-
-          montoFijo: clienteActual["Medidor"]
-            ? ""
-            : document.getElementById("detMontoFijo").value,
-
-          kwCobrado: estado === "Cobro Parcial"
-            ? document.getElementById("detKwCobrado").value
-            : (estado === "Notificacion" ? 0 : "")
-        };
-
-        const pendiente = await crearPendienteDesdeFormulario(
-          datosRespaldo,
-          fotoFactura,
-          fotoNotificacion
-        );
-
-        alert(
-          "No hubo conexión con el servidor.\n\n" +
-          "El cobro quedó guardado en este teléfono." +
-          "\nFactura: " + pendiente.numeroFactura +
-          "\nEstado: pendiente de sincronizar."
-        );
-
-        sesion.facturaActual = null;
-        localStorage.setItem(
-          "sesionApp",
-          JSON.stringify(sesion)
-        );
-
-        actualizarTextoFactura();
-        await actualizarContadorPendientesOffline();
-
-        cerrarDetalle();
-
-      } catch (errorLocal) {
-        console.error(
-          "No se pudo guardar el pendiente local:",
-          errorLocal
-        );
-
-        errorDiv.textContent =
-          "No se pudo guardar ni enviar el cobro. " +
-          "No cierres esta pantalla: " +
-          (errorLocal.message || "error local desconocido");
-      }
-
-    } else {
-      errorDiv.textContent =
-        "Error al guardar: " +
-        (error.message || "error desconocido");
-    }
-
+    errorDiv.textContent =
+      (error.message || "Error desconocido.") +
+      " No vuelvas a registrar este cobro sin revisar su estado.";
   } finally {
     boton.disabled = false;
     boton.textContent = "Guardar cobro";
   }
 }
+
 
 async function descargarReporteExcel() {
   const esPermitido = [
@@ -3047,7 +3038,7 @@ cobrador.textContent = "Usuario Cobrador: " +
 
 tarjeta.append(nombre, detalle, cobrador);
 
-      tarjeta.append(nombre, detalle, pareja);
+     
       lista.appendChild(tarjeta);
     });
 
