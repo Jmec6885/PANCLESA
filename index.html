@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>App de Cobros</title>
-<!-- VERSION_APP: v13-sesion-unica -->
+<!-- VERSION_APP: v14-coordinador -->
 <style>
   body {
     font-family: Arial, sans-serif;
@@ -317,8 +317,58 @@ button:disabled{background:#94a3b8!important;cursor:default;}
 #avisoSesionUnica{position:fixed;bottom:12px;left:12px;right:12px;z-index:2000;max-height:45vh;overflow:auto;padding:16px;border:2px solid #b42332;border-radius:12px;background:#fff6f6;color:#8f1d29;box-shadow:0 4px 20px #0003;}
 @media(max-width:380px){#headerApp{gap:8px;padding:12px;}#headerApp img{max-width:85px;}#headerApp .tituloApp{font-size:1rem;}}
 </style>
+<style id="estiloCoordinador">
+#pantallaCoordinador {max-width:720px;width:100%;margin:0 auto;padding:12px;}
+#pantallaCoordinador .pestanas {gap:4px;}
+#pantallaCoordinador .botonPestana {font-size:12px;min-width:0;}
+#estadoCoordinador {margin-top:8px;overflow-wrap:anywhere;}
+#pantallaCoordinador .tarjetaPareja {padding-bottom:8px;}
+</style>
 </head>
 <body>
+
+<section id="pantallaCoordinador" class="oculto">
+  <div class="encabezadoApp">
+    <span id="textoSesionCoordinador"></span>
+    <button type="button" class="botonCerrarSesion" onclick="cerrarSesion()">Cerrar sesión</button>
+  </div>
+  <div class="tarjetaCliente">
+    <h2>Resumen de coordinación</h2>
+    <div class="fila">Consulta global · Sonsonate, Santa Ana y Ahuachapan</div>
+    <button type="button" id="botonActualizarCoordinador" onclick="cargarResumenCoordinador()">Actualizar resumen</button>
+    <div id="estadoCoordinador" class="fila" role="status"></div>
+    <label class="etiquetaCampo" for="zonaCoordinador">Zona a visualizar</label>
+    <select id="zonaCoordinador" onchange="pintarResumenCoordinador()">
+      <option value="">Todas las zonas</option>
+      <option value="Sonsonate">Sonsonate</option>
+      <option value="Santa Ana">Santa Ana</option>
+      <option value="Ahuachapan">Ahuachapan</option>
+    </select>
+  </div>
+  <div class="pestanas">
+    <button type="button" id="coordTabTotales" class="botonPestana activa" onclick="cambiarTabCoordinador('totales')">Clientes por zona</button>
+    <button type="button" id="coordTabAvance" class="botonPestana" onclick="cambiarTabCoordinador('avance')">Avance por fecha</button>
+    <button type="button" id="coordTabAtrasos" class="botonPestana" onclick="cambiarTabCoordinador('atrasos')">Más de 40 días</button>
+  </div>
+  <div id="coordPanelTotales"><div id="coordListaTotales"></div></div>
+  <div id="coordPanelAvance" class="oculto">
+    <div class="tarjetaCliente">
+      <label class="etiquetaCampo" for="fechaCoordinador">Fecha del avance</label>
+      <input type="date" id="fechaCoordinador">
+      <button type="button" onclick="cargarResumenCoordinador()">Consultar fecha</button>
+      <label class="etiquetaCampo" for="fechasActividadCoordinador">Fechas con actividad registrada</label>
+      <select id="fechasActividadCoordinador" onchange="seleccionarFechaActividadCoordinador()"></select>
+      <div class="fila" id="fechaResultadoCoordinador"></div>
+      <div class="fila">Gestión incluye cobro total, parcial o notificación. Pago incluye cobro total o parcial.</div>
+    </div>
+    <div id="coordListaAvance"></div>
+  </div>
+  <div id="coordPanelAtrasos" class="oculto">
+    <div class="tarjetaCliente"><div id="criterioAtrasosCoordinador" class="fila"></div></div>
+    <div id="coordListaAtrasos"></div>
+  </div>
+</section>
+
 <header id="headerApp"><img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" onerror="this.style.display='none'"><div><div class="tituloApp">App de Cobros</div><div class="creditoApp">By. Jose Meneses</div></div></header>
 
 <div class="caja">
@@ -357,7 +407,7 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     <span id="textoSesion"></span>
     <button onclick="cerrarSesion()" class="botonCerrarSesion">Cerrar sesión</button>
   </div>
-  <div style="text-align:right; font-size:10px; color:#aaa;">v13-sesion-unica</div>
+  <div style="text-align:right; font-size:10px; color:#aaa;">v14-coordinador</div>
   <div class="barraAcciones" id="barraAcciones">
 
   <button
@@ -659,10 +709,11 @@ button:disabled{background:#94a3b8!important;cursor:default;}
       <option value="Supervisor">Supervisor</option>
       <option value="Contador">Contador</option>
       <option value="Administrador">Administrador</option>
+      <option value="Coordinador">Coordinador</option>
     </select>
-    <label class="etiquetaCampo">Zona (vacío si es Administrador)</label>
+    <label class="etiquetaCampo">Zona (vacío si es Administrador o Coordinador)</label>
     <select id="nuevoUsuarioZona">
-      <option value="">-- Administrador, todas --</option>
+      <option value="">-- Administrador / Coordinador, todas --</option>
       <option value="Santa Ana">Santa Ana</option>
       <option value="Ahuachapan">Ahuachapan</option>
       <option value="Sonsonate">Sonsonate</option>
@@ -943,7 +994,8 @@ async function intentarLogin() {
     const rolesSinInspectorNiFactura = [
       "Supervisor",
       "Contador",
-      "Administrador"
+      "Administrador",
+      "Coordinador"
     ];
 
     if (rolesSinInspectorNiFactura.includes(sesion.rol)) {
@@ -1358,6 +1410,11 @@ function guardarSesionYContinuar() {
 }
 
 function mostrarPantallaPrincipal() {
+  if (sesion.rol === "Coordinador") {
+    mostrarPantallaCoordinador();
+    return;
+  }
+  document.getElementById("pantallaCoordinador").classList.add("oculto");
   document.body.classList.add("modoApp");
 
   document.getElementById("pasoUsuario")
@@ -1982,6 +2039,9 @@ function inicializarFechaAvance() {
 }
 
 function actualizarPantallaPrincipal() {
+  if (sesion.rol === "Coordinador") {
+    return cargarResumenCoordinador();
+  }
   cargarClientesParaCobro();
   cargarAvanceDelDia();
 }
@@ -1998,6 +2058,7 @@ function consultarAvancePorFecha() {
 }
 
 async function cargarAvanceDelDia(fechaSeleccionada = null) {
+  if (sesion.rol === "Coordinador") return;
   const esCobrador = sesion.rol === "Cobrador";
   const esContador = sesion.rol === "Contador";
   const esSupervisor = sesion.rol === "Supervisor";
@@ -2170,6 +2231,7 @@ function cambiarPestana(nombre) {
 }
 
 async function cargarClientesAtrasados() {
+  if (sesion.rol === "Coordinador") return;
   const cargando = document.getElementById("cargandoAtrasados");
   const contenedor = document.getElementById("listaAtrasados");
   cargando.classList.remove("oculto");
@@ -2379,8 +2441,8 @@ async function crearUsuarioNuevo() {
     return;
   }
 
-  if (rol !== "Administrador" && !zona) {
-    errorDiv.textContent = "Selecciona la zona (solo Administrador puede quedar sin zona)";
+  if (!["Administrador", "Coordinador"].includes(rol) && !zona) {
+    errorDiv.textContent = "Selecciona la zona (Administrador y Coordinador pueden quedar sin zona)";
     return;
   }
 
@@ -2565,6 +2627,7 @@ async function cargarClientesNoLiberados() {
 
 
 async function cargarClientesParaCobro() {
+  if (sesion.rol === "Coordinador") return;
   const contenedor = document.getElementById("listaClientes");
   const cargando = document.getElementById("cargandoCobros");
 
@@ -4273,6 +4336,136 @@ window.addEventListener("online",verificarSesionActual);
 document.addEventListener("visibilitychange",verificarSesionActual);
 window.addEventListener("DOMContentLoaded",verificarSesionActual);
 setInterval(verificarSesionActual,30000);
+
+let datosCoordinador = null;
+let solicitudCoordinador = 0;
+
+function mostrarPantallaCoordinador() {
+  document.body.classList.add("modoApp");
+  document.querySelector(".caja").classList.add("oculto");
+  ["pantallaPrincipal","pantallaDetalle","pantallaPendientesOffline","pantallaFacturas",
+   "pantallaLiberar","pantallaAgregar","pantallaUsuarios","pantallaUbicaciones"]
+    .forEach(id => document.getElementById(id)?.classList.add("oculto"));
+  document.getElementById("pantallaCoordinador").classList.remove("oculto");
+  document.getElementById("textoSesionCoordinador").textContent = sesion.usuario + " · Coordinador · Todas las zonas";
+  const campo = document.getElementById("fechaCoordinador");
+  if (!campo.value) {
+    const partes = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+      timeZone:"America/El_Salvador",year:"numeric",month:"2-digit",day:"2-digit"
+    }).formatToParts(new Date()).map(p=>[p.type,p.value]));
+    campo.value = partes.year + "-" + partes.month + "-" + partes.day;
+  }
+  cambiarTabCoordinador("totales");
+  cargarResumenCoordinador();
+}
+
+function cambiarTabCoordinador(nombre) {
+  ["totales","avance","atrasos"].forEach(tab => {
+    const sufijo = tab[0].toUpperCase()+tab.slice(1);
+    document.getElementById("coordPanel"+sufijo).classList.toggle("oculto",tab!==nombre);
+    document.getElementById("coordTab"+sufijo).classList.toggle("activa",tab===nombre);
+  });
+}
+
+function seleccionarFechaActividadCoordinador() {
+  const fecha = document.getElementById("fechasActividadCoordinador").value;
+  if (!fecha) return;
+  document.getElementById("fechaCoordinador").value=fecha;
+  cargarResumenCoordinador();
+}
+
+async function cargarResumenCoordinador() {
+  if (sesion.rol!=="Coordinador" || sesionBloqueada) return;
+  const fecha=document.getElementById("fechaCoordinador").value;
+  const estado=document.getElementById("estadoCoordinador");
+  const boton=document.getElementById("botonActualizarCoordinador");
+  if (!fecha) { estado.textContent="Selecciona una fecha."; return; }
+  const numero=++solicitudCoordinador;
+  const token=sesion.token;
+  datosCoordinador=null;
+  pintarResumenCoordinador();
+  estado.textContent="Consultando totales y avance...";
+  boton.disabled=true;
+  try {
+    if (!navigator.onLine) throw new Error("Esta pantalla necesita conexión para consultar datos actuales.");
+    const r=await llamarBackend("resumenCoordinador",{fecha});
+    if (numero!==solicitudCoordinador || token!==sesion.token || sesion.rol!=="Coordinador") return;
+    if (!r || !r.exito) throw new Error(r?.mensaje || "No se pudo consultar el resumen.");
+    if (!Array.isArray(r.zonas) || !Array.isArray(r.fechasConActividad)) throw new Error("Respuesta global incompleta.");
+    datosCoordinador=r;
+    const select=document.getElementById("fechasActividadCoordinador");
+    select.replaceChildren();
+    const vacio=document.createElement("option");
+    vacio.value="";vacio.textContent="Selecciona una fecha con actividad";select.appendChild(vacio);
+    r.fechasConActividad.forEach(dia=>{
+      const opcion=document.createElement("option");opcion.value=dia;opcion.textContent=fechaTextoCoordinador(dia);select.appendChild(opcion);
+    });
+    if (r.fechasConActividad.includes(r.fecha)) select.value=r.fecha;
+    pintarResumenCoordinador();
+    estado.textContent="Resumen consultado correctamente. No incluye pendientes sin confirmar del teléfono.";
+  } catch(error) {
+    if (numero!==solicitudCoordinador) return;
+    datosCoordinador=null;
+    pintarResumenCoordinador();
+    estado.textContent="No se pudo actualizar: "+(error.message || "Error desconocido.");
+  } finally {
+    if (numero===solicitudCoordinador) boton.disabled=false;
+  }
+}
+
+function fechaTextoCoordinador(fecha) {
+  const m=String(fecha || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? m[3]+"/"+m[2]+"/"+m[1] : String(fecha || "-");
+}
+
+function pintarResumenCoordinador() {
+  const totales=document.getElementById("coordListaTotales");
+  const avance=document.getElementById("coordListaAvance");
+  const atrasos=document.getElementById("coordListaAtrasos");
+  const criterio=document.getElementById("criterioAtrasosCoordinador");
+  const fechaResultado=document.getElementById("fechaResultadoCoordinador");
+  if (!datosCoordinador) {
+    [totales,avance,atrasos].forEach(el=>el.replaceChildren());
+    criterio.textContent="";fechaResultado.textContent="";
+    document.getElementById("fechasActividadCoordinador").replaceChildren();
+    return;
+  }
+  const zona=document.getElementById("zonaCoordinador").value;
+  const lista=datosCoordinador.zonas.filter(r=>!zona || r.zona===zona);
+  const n=v=>Number.isFinite(Number(v)) ? Number(v) : 0;
+  const cantidad=v=>n(v).toLocaleString("es-SV");
+  const dinero=v=>"$"+n(v).toFixed(2);
+  const fila=(etiqueta,valor)=>'<div class="fila"><span class="etiqueta">'+escaparHtml(etiqueta)+': </span>'+escaparHtml(valor)+'</div>';
+  const tarjeta=(titulo,cuerpo)=>'<div class="tarjetaCliente"><div class="nombre">'+escaparHtml(titulo)+'</div>'+cuerpo+'</div>';
+  totales.innerHTML=lista.map(r=>tarjeta(r.zona,
+    fila("Total de clientes",cantidad(r.totalClientes))+
+    fila("Activos",cantidad(r.activos))+
+    fila("Desactivados",cantidad(r.desactivados))
+  )).join("");
+  fechaResultado.textContent="Avance de "+fechaTextoCoordinador(datosCoordinador.fecha);
+  avance.innerHTML=lista.map(r=>{
+    const general=fila("Registros",cantidad(r.registros))+
+      fila("Clientes con gestión",cantidad(r.clientesConGestion))+
+      fila("Clientes con pago",cantidad(r.clientesConPago))+
+      fila("Monto cobrado",dinero(r.montoCobrado))+
+      fila("kWh cobrados",n(r.kwCobrados).toFixed(2))+
+      fila("Totales / parciales / notificaciones",cantidad(r.cobrosTotales)+" / "+cantidad(r.cobrosParciales)+" / "+cantidad(r.notificaciones));
+    const parejas=(r.parejas || []).map(p=>'<div class="tarjetaPareja">'+
+      fila("Inspectores",p.pareja)+fila("Registros",cantidad(p.registros))+
+      fila("Clientes con gestión / con pago",cantidad(p.clientesConGestion)+" / "+cantidad(p.clientesConPago))+
+      fila("Monto cobrado",dinero(p.montoCobrado))+fila("kWh cobrados",n(p.kwCobrados).toFixed(2))+
+      fila("Totales / parciales / notificaciones",cantidad(p.cobrosTotales)+" / "+cantidad(p.cobrosParciales)+" / "+cantidad(p.notificaciones))+
+      fila("Primera / última gestión",(p.horaInicio || "-")+" / "+(p.horaFin || "-"))+'</div>').join("");
+    return tarjeta(r.zona,general+(parejas || '<div class="fila">Sin actividad en esta fecha.</div>'));
+  }).join("");
+  criterio.textContent=(datosCoordinador.criterioAtrasos || "")+" Corte: "+fechaTextoCoordinador(datosCoordinador.fechaCorteAtrasos)+".";
+  atrasos.innerHTML=lista.map(r=>tarjeta(r.zona,
+    fila("Activos con más de 40 días desde su último pago",cantidad(r.masDe40Dias))+
+    fila("Activos sin pagos registrados",cantidad(r.sinPagosRegistrados))+
+    fila("Total de ambos grupos",cantidad(n(r.masDe40Dias)+n(r.sinPagosRegistrados)))
+  )).join("");
+}
+
 </script>
 
 </body>
