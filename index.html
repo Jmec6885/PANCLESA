@@ -2520,6 +2520,8 @@ if (sesion.rol !== "Cobrador") {
   return;
 }
   clienteActual = cliente;
+document.getElementById("detFotoFactura").value = "";
+document.getElementById("detFotoNotificacion").value = "";
   await obtenerListaPrecios();
 
   document.getElementById("pantallaPrincipal").classList.add("oculto");
