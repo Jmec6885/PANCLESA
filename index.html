@@ -747,73 +747,156 @@ button:disabled{background:#94a3b8!important;cursor:default;}
 
   <div class="tarjetaCliente">
 
-    <!-- Solo si el cliente tiene medidor -->
-    <div id="bloqueMedidor" class="oculto">
-      <label class="etiquetaCampo">Lectura anterior</label>
-      <input type="text" id="detLecturaAnterior" disabled>
+  <!-- Cliente con medidor: cálculo mediante lecturas -->
+  <div id="bloqueMedidor" class="oculto">
+    <label class="etiquetaCampo" for="detLecturaAnterior">
+      Lectura anterior
+    </label>
+    <input
+      type="text"
+      id="detLecturaAnterior"
+      disabled
+    >
 
-      <label class="etiquetaCampo">Lectura actual</label>
-      <input type="number" id="detLecturaActual" placeholder="Ingresa la lectura de hoy">
+    <label class="etiquetaCampo" for="detLecturaActual">
+      Lectura actual
+    </label>
+    <input
+      type="number"
+      id="detLecturaActual"
+      placeholder="Ingresa la lectura de hoy"
+    >
 
-      <div class="fila"><span class="etiqueta">Consumo:</span> <span id="detConsumo">0</span> kWh</div>
-      <div class="fila"><span class="etiqueta">Pendiente meses anteriores:</span> <span id="detPteAnterior">0</span> kWh</div>
-      <div class="fila"><span class="etiqueta">Consumo total:</span> <span id="detConsumoTotal">0</span> kWh</div>
+    <div class="fila">
+      <span class="etiqueta">Consumo:</span>
+      <span id="detConsumo">0</span> kWh
     </div>
 
-    <!-- Solo si el cliente NO tiene medidor (cuota fija) -->
-    <div id="bloqueSinMedidor" class="oculto">
-      <label class="etiquetaCampo">
-  kWh a cobrar (sin medidor)
-</label>
-
-<input
-  type="number"
-  step="0.01"
-  min="0"
-  id="detMontoFijo"
-  placeholder="Ingresa los kWh"
->
-      <input type="number" step="0.01" id="detMontoFijo" placeholder="0.00">
+    <div class="fila">
+      <span class="etiqueta">Pendiente meses anteriores:</span>
+      <span id="detPteAnterior">0</span> kWh
     </div>
 
-    <label class="etiquetaCampo">Total $ a cobrar</label>
-    <input type="text" id="detTotalCobrar" disabled>
-
-    <label class="etiquetaCampo">Estado</label>
-    <select id="detEstado" onchange="actualizarCamposPorEstado()">
-      <option value="">Selecciona...</option>
-      <option value="Cobro Total">Cobro Total</option>
-      <option value="Cobro Parcial">Cobro Parcial</option>
-      <option value="Notificacion">Notificación</option>
-    </select>
-
-    <!-- Si es parcial, cuánto sí se cobró -->
-    <div id="bloqueParcial" class="oculto">
-      <label class="etiquetaCampo">KW a cobrar</label>
-      <input type="number" step="0.01" id="detKwCobrado" placeholder="0.00">
-      <div class="fila"><span class="etiqueta">Quedará pendiente:</span> <span id="detKwPendienteNuevo">0</span></div>
-      <div class="fila"><span class="etiqueta">Monto a cobrar hoy:</span> <span id="detMontoParcial">$0.00</span></div>
+    <div class="fila">
+      <span class="etiqueta">Consumo total:</span>
+      <span id="detConsumoTotal">0</span> kWh
     </div>
-
-    <label class="etiquetaCampo">N° Factura</label>
-    <input type="text" id="detNumeroFactura" disabled>
-
-    <label class="etiquetaCampo">Observaciones (obligatorio)</label>
-    <textarea id="detObservaciones" rows="3" placeholder="Describe cómo quedó el cobro"></textarea>
-
-    <div id="bloqueFotoFactura" class="oculto">
-      <label class="etiquetaCampo">Foto de factura (obligatoria)</label>
-      <input type="file" id="detFotoFactura" accept="image/*" capture="environment">
-    </div>
-
-    <div id="bloqueFotoNotificacion" class="oculto">
-      <label class="etiquetaCampo">Foto de notificación (obligatoria)</label>
-      <input type="file" id="detFotoNotificacion" accept="image/*" capture="environment">
-    </div>
-
-    <div class="error" id="errorDetalle"></div>
-    <button onclick="guardarCobro()" id="botonGuardarCobro">Guardar cobro</button>
   </div>
+
+  <!-- Cliente sin medidor: ingreso manual de kWh -->
+  <div id="bloqueSinMedidor" class="oculto">
+    <label class="etiquetaCampo" for="detMontoFijo">
+      kWh a cobrar (sin medidor)
+    </label>
+
+    <input
+      type="number"
+      step="0.01"
+      min="0"
+      id="detMontoFijo"
+      placeholder="Ingresa los kWh"
+    >
+  </div>
+
+  <label class="etiquetaCampo" for="detTotalCobrar">
+    Total $ a cobrar
+  </label>
+  <input
+    type="text"
+    id="detTotalCobrar"
+    disabled
+  >
+
+  <label class="etiquetaCampo" for="detEstado">
+    Estado
+  </label>
+  <select
+    id="detEstado"
+    onchange="actualizarCamposPorEstado()"
+  >
+    <option value="">Selecciona...</option>
+    <option value="Cobro Total">Cobro Total</option>
+    <option value="Cobro Parcial">Cobro Parcial</option>
+    <option value="Notificacion">Notificación</option>
+  </select>
+
+  <!-- Cobro parcial: kWh cubiertos por el pago -->
+  <div id="bloqueParcial" class="oculto">
+    <label class="etiquetaCampo" for="detKwCobrado">
+      kWh cubiertos por el cobro parcial
+    </label>
+    <input
+      type="number"
+      step="0.01"
+      min="0"
+      id="detKwCobrado"
+      placeholder="Ingresa los kWh pagados"
+    >
+
+    <div class="fila">
+      <span class="etiqueta">Quedará pendiente:</span>
+      <span id="detKwPendienteNuevo">0</span> kWh
+    </div>
+
+    <div class="fila">
+      <span class="etiqueta">Monto a cobrar hoy:</span>
+      <span id="detMontoParcial">$0.00</span>
+    </div>
+  </div>
+
+  <label class="etiquetaCampo" for="detNumeroFactura">
+    N° Factura
+  </label>
+  <input
+    type="text"
+    id="detNumeroFactura"
+    disabled
+  >
+
+  <label class="etiquetaCampo" for="detObservaciones">
+    Observaciones (obligatorio)
+  </label>
+  <textarea
+    id="detObservaciones"
+    rows="3"
+    placeholder="Describe cómo quedó el cobro"
+  ></textarea>
+
+  <div id="bloqueFotoFactura" class="oculto">
+    <label class="etiquetaCampo" for="detFotoFactura">
+      Foto de factura (obligatoria)
+    </label>
+    <input
+      type="file"
+      id="detFotoFactura"
+      accept="image/*"
+      capture="environment"
+    >
+  </div>
+
+  <div id="bloqueFotoNotificacion" class="oculto">
+    <label class="etiquetaCampo" for="detFotoNotificacion">
+      Foto de notificación (obligatoria)
+    </label>
+    <input
+      type="file"
+      id="detFotoNotificacion"
+      accept="image/*"
+      capture="environment"
+    >
+  </div>
+
+  <div class="error" id="errorDetalle"></div>
+
+  <button
+    type="button"
+    onclick="guardarCobro()"
+    id="botonGuardarCobro"
+  >
+    Guardar cobro
+  </button>
+
+</div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
