@@ -762,7 +762,17 @@ button:disabled{background:#94a3b8!important;cursor:default;}
 
     <!-- Solo si el cliente NO tiene medidor (cuota fija) -->
     <div id="bloqueSinMedidor" class="oculto">
-      <label class="etiquetaCampo">Monto a cobrar (cuota fija)</label>
+      <label class="etiquetaCampo">
+  kWh a cobrar (sin medidor)
+</label>
+
+<input
+  type="number"
+  step="0.01"
+  min="0"
+  id="detMontoFijo"
+  placeholder="Ingresa los kWh"
+>
       <input type="number" step="0.01" id="detMontoFijo" placeholder="0.00">
     </div>
 
@@ -1693,6 +1703,7 @@ async function crearPendienteDesdeFormulario(
 
     lecturaActual: datos.lecturaActual ?? "",
     montoFijo: datos.montoFijo ?? "",
+kwManual: datos.kwManual ?? "",
     kwCobrado: datos.kwCobrado ?? "",
 
     latitud: datos.latitud ?? "",
@@ -3015,8 +3026,23 @@ function validarLecturaActual() {
 }
 
 function calcularTotalSinMedidor() {
-  const monto = Number(document.getElementById("detMontoFijo").value) || 0;
-  document.getElementById("detTotalCobrar").value = "$" + monto.toFixed(2);
+  const campo = document.getElementById("detMontoFijo");
+  const total = document.getElementById("detTotalCobrar");
+  const texto = campo.value.trim();
+  const kw = Number(texto);
+
+  if (!texto || !Number.isFinite(kw) || kw < 0) {
+    total.value = "";
+    actualizarKwPendienteParcial();
+    return;
+  }
+
+  const monto = buscarMontoPorConsumo(kw);
+
+  total.value = monto !== null
+    ? "$" + monto.toFixed(2)
+    : "No encontrado en tabla Precios";
+
   actualizarKwPendienteParcial();
 }
 
@@ -3205,6 +3231,7 @@ function datosDesdePendiente(p) {
     numeroFactura: p.numeroFactura,
     lecturaActual: p.lecturaActual,
     montoFijo: p.montoFijo,
+kwManual: p.kwManual,
     kwCobrado: p.kwCobrado,
 
     latitud: p.latitud,
@@ -3599,11 +3626,22 @@ inspector2,
       const textoMonto = document.getElementById("detMontoFijo").value;
       const monto = Number(textoMonto);
 
-      if (usaFactura && (!Number.isFinite(monto) || monto <= 0)) {
-        throw new Error("Ingresa una cuota fija válida.");
-      }
+     if (
+  !Number.isFinite(monto) ||
+  monto < 0 ||
+  (usaFactura && (!textoMonto.trim() || monto <= 0))
+) {
+  throw new Error("Ingresa una cantidad válida de kWh.");
+}
 
-      datos.montoFijo = textoMonto;
+if (monto > 0 && buscarMontoPorConsumo(monto) === null) {
+  throw new Error(
+    "No existe precio configurado para " + monto + " kWh."
+  );
+}
+
+datos.montoFijo = textoMonto;
+datos.kwManual = textoMonto;
     }
 
     if (estado === "Cobro Parcial") {
