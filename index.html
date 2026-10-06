@@ -474,6 +474,17 @@
     <div class="fila" id="textoPendientesOffline"></div>
   </div>
 
+<button
+  type="button"
+  id="botonSincronizarOffline"
+  onclick="sincronizarPendientesOffline()"
+>
+  Sincronizar ahora
+</button>
+
+<div id="estadoSincronizacion" class="fila" role="status"></div>
+
+
   <div id="listaPendientesOffline"></div>
 </div>
 
@@ -1141,6 +1152,7 @@ actualizarContadorPendientesOffline();
   actualizarTextoFactura();
   inicializarFechaAvance();
   actualizarPantallaPrincipal();
+programarSincronizacionOffline();
 }
 
 const NOMBRE_BD_OFFLINE = "cobrosOfflineDB";
@@ -1204,9 +1216,10 @@ async function obtenerPendientesOffline() {
 
       const propios = todos
         .filter(item =>
-          item.usuario === sesion.usuario &&
-          item.zona === sesion.zona
-        )
+  item.usuario === sesion.usuario &&
+  item.zona === sesion.zona &&
+  item.estado !== "CONFIRMADO"
+)
         .sort((a, b) =>
           new Date(a.creadoEn) - new Date(b.creadoEn)
         );
@@ -1292,23 +1305,26 @@ async function crearPendienteDesdeFormulario(
   fotoNotificacion
 ) {
   const pendiente = {
-    idCobro: datos.idCobro || generarIdCobroOffline(),
+    versionCola: 2,
+    idCobro: datos.idCobro,
     estado: "PENDIENTE",
-    creadoEn: new Date().toISOString(),
+    creadoEn: datos.fechaCaptura,
+    fechaCaptura: datos.fechaCaptura,
+    fechaGpsCaptura: datos.fechaGpsCaptura || "",
 
-    usuario: sesion.usuario,
-    zona: sesion.zona,
-    inspector1: sesion.inspector1,
-    inspector2: sesion.inspector2,
+    usuario: datos.usuarioLogin,
+    zona: datos.zonaCaptura,
+    inspector1: datos.inspector1,
+    inspector2: datos.inspector2,
 
-    codigo: clienteActual["CODIGO"],
-    nombreCliente: clienteActual["Nombre Cliente"] || "",
+    codigo: datos.codigo,
+    nombreCliente: datos.nombreCliente || "",
     numeroFactura: String(datos.numeroFactura || ""),
     estadoCobro: datos.estado,
     observaciones: datos.observaciones,
 
-    lecturaActual: datos.lecturaActual || "",
-    montoFijo: datos.montoFijo || "",
+    lecturaActual: datos.lecturaActual ?? "",
+    montoFijo: datos.montoFijo ?? "",
     kwCobrado: datos.kwCobrado ?? "",
 
     latitud: datos.latitud ?? "",
@@ -1323,7 +1339,6 @@ async function crearPendienteDesdeFormulario(
   };
 
   await guardarPendienteOffline(pendiente);
-
   return pendiente;
 }
 
@@ -1414,6 +1429,21 @@ async function abrirPendientesOffline() {
           '<span class="etiqueta">Guardado:</span> ' +
           escaparHtml(fecha) +
         "</div>";
+
+if (item.versionCola !== 2) {
+  const aviso = document.createElement("div");
+  aviso.className = "fila";
+  aviso.textContent =
+    "Pendiente antiguo: requiere revisión antes de enviarlo.";
+  tarjeta.appendChild(aviso);
+}
+
+if (item.ultimoError) {
+  const aviso = document.createElement("div");
+  aviso.className = "error";
+  aviso.textContent = item.ultimoError;
+  tarjeta.appendChild(aviso);
+}
 
       lista.appendChild(tarjeta);
     });
@@ -1799,13 +1829,21 @@ $${Number(item.monto).toFixed(2)}
 }
 
 async function cerrarSesion() {
+  if (guardandoCobroLocal || sincronizacionEnCurso) {
+    alert(
+      "Espera a que termine el guardado o la sincronización " +
+      "antes de cerrar sesión."
+    );
+    return;
+  }
+
   const confirmar = confirm("¿Seguro que quieres cerrar sesión?");
   if (!confirmar) return;
 
   try {
     await llamarBackend("logout", {});
-  } catch (err) {
-    // Sin señal: la sesión se cierra igual en este equipo.
+  } catch (error) {
+    // Sin conexión, se cierra la sesión local.
   }
 
   localStorage.removeItem("sesionApp");
@@ -1813,9 +1851,13 @@ async function cerrarSesion() {
   localStorage.removeItem("listaPrecios");
 
   sesion = {
-    usuario: null, rol: null, zona: null,
-    inspector1: null, inspector2: null,
-    facturaActual: null, token: null
+    usuario: null,
+    rol: null,
+    zona: null,
+    inspector1: null,
+    inspector2: null,
+    facturaActual: null,
+    token: null
   };
 
   location.reload();
@@ -2519,6 +2561,10 @@ if (sesion.rol !== "Cobrador") {
   alert("Este rol es de consulta y administración. Los cobros solo los registra el Cobrador.");
   return;
 }
+
+if (guardandoCobroLocal || sincronizacionEnCurso) {
+  return;
+}
   clienteActual = cliente;
 document.getElementById("detFotoFactura").value = "";
 document.getElementById("detFotoNotificacion").value = "";
@@ -2624,6 +2670,10 @@ function actualizarCamposPorEstado() {
 }
 
 function cerrarDetalle() {
+
+if (guardandoCobroLocal || sincronizacionEnCurso) {
+  return;
+}
   document.getElementById("pantallaDetalle").classList.add("oculto");
   document.getElementById("pantallaPrincipal").classList.remove("oculto");
 }
@@ -2657,7 +2707,7 @@ function comprimirImagen(archivo) {
 }
 
 function obtenerUbicacionActual() {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     if (!navigator.geolocation) {
       resolve({
         disponible: false,
@@ -2667,20 +2717,17 @@ function obtenerUbicacionActual() {
     }
 
     navigator.geolocation.getCurrentPosition(
-      (posicion) => {
-        resolve({
-          disponible: true,
-          latitud: posicion.coords.latitude,
-          longitud: posicion.coords.longitude,
-          precisionGps: posicion.coords.accuracy
-        });
-      },
-      (error) => {
-        resolve({
-          disponible: false,
-          mensaje: error.message || "No se pudo obtener ubicación."
-        });
-      },
+      posicion => resolve({
+        disponible: true,
+        latitud: posicion.coords.latitude,
+        longitud: posicion.coords.longitude,
+        precisionGps: posicion.coords.accuracy,
+        fechaGpsCaptura: new Date(posicion.timestamp).toISOString()
+      }),
+      error => resolve({
+        disponible: false,
+        mensaje: error.message || "No se pudo obtener ubicación."
+      }),
       {
         enableHighAccuracy: true,
         timeout: 15000,
@@ -2690,11 +2737,354 @@ function obtenerUbicacionActual() {
   });
 }
 
+
+let guardandoCobroLocal = false;
+let sincronizacionEnCurso = false;
+
+function mostrarEstadoSincronizacion(texto) {
+  const elemento = document.getElementById("estadoSincronizacion");
+  if (elemento) elemento.textContent = texto;
+}
+
+async function actualizarRegistroOffline(registro) {
+  const bd = await abrirBaseOffline();
+
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = bd.transaction(
+        TABLA_PENDIENTES_OFFLINE,
+        "readwrite"
+      );
+
+      tx.objectStore(TABLA_PENDIENTES_OFFLINE).put(registro);
+
+      tx.oncomplete = () => {
+        bd.close();
+        resolve(registro);
+      };
+
+      tx.onabort = () => {
+        const error = tx.error || new Error("Falló la actualización local.");
+        bd.close();
+        reject(error);
+      };
+    } catch (error) {
+      bd.close();
+      reject(error);
+    }
+  });
+}
+
+async function pedirBackendParaSincronizar(accion, datos, identidad) {
+  const controlador = new AbortController();
+  const limite = setTimeout(() => controlador.abort(), 45000);
+
+  try {
+    const respuesta = await fetch(URL_APPS_SCRIPT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8"
+      },
+      body: JSON.stringify({
+        ...datos,
+        accion,
+        token: identidad.token
+      }),
+      signal: controlador.signal
+    });
+
+    const texto = await respuesta.text();
+
+    if (!respuesta.ok) {
+      throw new Error("Servidor HTTP " + respuesta.status);
+    }
+
+    let resultado;
+
+    try {
+      resultado = JSON.parse(texto);
+    } catch (error) {
+      throw new Error("El servidor no devolvió JSON válido.");
+    }
+
+    if (!resultado || typeof resultado.exito !== "boolean") {
+      throw new Error("Respuesta del servidor incompleta.");
+    }
+
+    return resultado;
+  } finally {
+    clearTimeout(limite);
+  }
+}
+
+function datosDesdePendiente(p) {
+  return {
+    idCobro: p.idCobro,
+    codigo: p.codigo,
+    estado: p.estadoCobro,
+    observaciones: p.observaciones,
+
+    usuarioLogin: p.usuario,
+    usuario: p.inspector1 + " / " + p.inspector2,
+
+    numeroFactura: p.numeroFactura,
+    lecturaActual: p.lecturaActual,
+    montoFijo: p.montoFijo,
+    kwCobrado: p.kwCobrado,
+
+    latitud: p.latitud,
+    longitud: p.longitud,
+    precisionGps: p.precisionGps,
+
+    fechaCaptura: p.fechaCaptura,
+    fechaGpsCaptura: p.fechaGpsCaptura || "",
+
+    fotoFactura: p.fotoFactura,
+    fotoNotificacion: p.fotoNotificacion
+  };
+}
+
+function validarConfirmacionLocal(p, respuesta) {
+  if (
+    !respuesta ||
+    respuesta.exito !== true ||
+    respuesta.idCobro !== p.idCobro ||
+    respuesta.usuarioCobrador !== p.usuario ||
+    String(respuesta.numeroFactura || "") !== String(p.numeroFactura || "")
+  ) {
+    throw new Error("La confirmación no coincide con el cobro local.");
+  }
+}
+
+async function ejecutarColaOffline(identidad) {
+  const pendientes = await obtenerPendientesOffline();
+  let confirmados = 0;
+  let antiguos = 0;
+  let revisiones = 0;
+
+  for (const p of pendientes) {
+    if (
+      !navigator.onLine ||
+      sesion.usuario !== identidad.usuario ||
+      sesion.zona !== identidad.zona ||
+      sesion.token !== identidad.token
+    ) {
+      break;
+    }
+
+    // Los pendientes previos a esta versión requieren revisión.
+    if (p.versionCola !== 2) {
+      antiguos++;
+      continue;
+    }
+
+    if (p.estado === "REVISION") {
+      revisiones++;
+      continue;
+    }
+
+    mostrarEstadoSincronizacion(
+      "Consultando cobro " + p.codigo +
+      " · Factura " + (p.numeroFactura || "Sin factura")
+    );
+
+    try {
+      const consulta = await pedirBackendParaSincronizar(
+        "consultarCobro",
+        { idCobro: p.idCobro },
+        identidad
+      );
+
+      if (consulta.sesionExpirada) {
+        mostrarEstadoSincronizacion(
+          "Sesión expirada. Inicia sesión otra vez. " +
+          "Los cobros siguen guardados."
+        );
+        return;
+      }
+
+      if (!consulta.exito) {
+        if (consulta.requiereRevision) {
+          p.estado = "REVISION";
+          p.ultimoError = consulta.mensaje || "Requiere revisión.";
+          await actualizarRegistroOffline(p);
+          revisiones++;
+          continue;
+        }
+
+        throw new Error(consulta.mensaje || "No se pudo consultar el ID.");
+      }
+
+      let respuesta;
+
+      if (consulta.encontrado === true) {
+        if (
+          consulta.idCobro !== p.idCobro ||
+          String(consulta.codigo) !== String(p.codigo)
+        ) {
+          p.estado = "REVISION";
+          p.ultimoError = "La consulta corresponde a otro registro.";
+          await actualizarRegistroOffline(p);
+          revisiones++;
+          continue;
+        }
+
+        if (consulta.confirmado !== true) {
+          p.estado = "REVISION";
+          p.ultimoError = consulta.mensaje || "Registro incompleto.";
+          await actualizarRegistroOffline(p);
+          revisiones++;
+          continue;
+        }
+
+        respuesta = consulta.respuesta;
+      } else if (consulta.encontrado === false) {
+        p.intentos = Number(p.intentos || 0) + 1;
+        await actualizarRegistroOffline(p);
+
+        respuesta = await pedirBackendParaSincronizar(
+          "guardarCobro",
+          datosDesdePendiente(p),
+          identidad
+        );
+
+        if (respuesta.sesionExpirada) {
+          mostrarEstadoSincronizacion(
+            "Sesión expirada. El pendiente se conserva."
+          );
+          return;
+        }
+
+        if (!respuesta.exito) {
+          p.estado = "REVISION";
+          p.ultimoError =
+            respuesta.mensaje || "El servidor rechazó el cobro.";
+          await actualizarRegistroOffline(p);
+          revisiones++;
+          continue;
+        }
+      } else {
+        throw new Error("La consulta no indicó si existe el cobro.");
+      }
+
+      validarConfirmacionLocal(p, respuesta);
+
+      p.estado = "CONFIRMADO";
+      p.confirmadoEn = new Date().toISOString();
+      p.respuestaServidor = respuesta;
+      p.ultimoError = "";
+
+      await actualizarRegistroOffline(p);
+      confirmados++;
+    } catch (error) {
+      p.ultimoError = error.message || "No se pudo confirmar el envío.";
+
+      // Conserva PENDIENTE: la próxima vez consultará el mismo ID.
+      await actualizarRegistroOffline(p);
+
+      mostrarEstadoSincronizacion(
+        "Sincronización detenida: " + p.ultimoError +
+        " El cobro sigue guardado."
+      );
+      return;
+    }
+  }
+
+  mostrarEstadoSincronizacion(
+    "Confirmados en este intento: " + confirmados +
+    " · Antiguos sin enviar: " + antiguos +
+    " · Requieren revisión: " + revisiones
+  );
+
+  if (confirmados && !guardandoCobroLocal) {
+    cargarClientesParaCobro();
+    cargarAvanceDelDia();
+    atrasadosCargados = false;
+  }
+}
+
+async function sincronizarPendientesOffline() {
+  if (
+    sincronizacionEnCurso ||
+    guardandoCobroLocal ||
+    sesion.rol !== "Cobrador" ||
+    !sesion.usuario ||
+    !sesion.zona ||
+    !sesion.token
+  ) {
+    return;
+  }
+
+  if (!navigator.onLine) {
+    mostrarEstadoSincronizacion(
+      "Sin señal. Los cobros permanecen en el teléfono."
+    );
+    return;
+  }
+
+  // Evita dos sincronizadores simultáneos en distintas pestañas.
+  if (!navigator.locks) {
+    mostrarEstadoSincronizacion(
+      "Este navegador no permite el bloqueo entre pestañas. " +
+      "Usa Chrome actualizado para esta versión."
+    );
+    return;
+  }
+
+  sincronizacionEnCurso = true;
+
+  const boton = document.getElementById("botonSincronizarOffline");
+  if (boton) boton.disabled = true;
+
+  const identidad = {
+    usuario: sesion.usuario,
+    zona: sesion.zona,
+    token: sesion.token
+  };
+
+  try {
+    await navigator.locks.request(
+      "cobros-sincronizacion-v2",
+      { ifAvailable: true },
+      async bloqueo => {
+        if (!bloqueo) {
+          mostrarEstadoSincronizacion(
+            "Otra pestaña está sincronizando. Espera."
+          );
+          return;
+        }
+
+        await ejecutarColaOffline(identidad);
+      }
+    );
+  } catch (error) {
+    mostrarEstadoSincronizacion(
+      "No se pudo completar la sincronización: " +
+      (error.message || "Error local.")
+    );
+  } finally {
+    sincronizacionEnCurso = false;
+    if (boton) boton.disabled = false;
+
+    await actualizarContadorPendientesOffline();
+
+    const pantalla = document.getElementById("pantallaPendientesOffline");
+
+    if (pantalla && !pantalla.classList.contains("oculto")) {
+      await abrirPendientesOffline();
+    }
+  }
+}
+
 async function guardarCobro() {
   const errorDiv = document.getElementById("errorDetalle");
   const boton = document.getElementById("botonGuardarCobro");
 
   if (boton.disabled) return;
+if (guardandoCobroLocal || sincronizacionEnCurso) {
+  errorDiv.textContent = "Espera a que termine el guardado o sincronización.";
+  return;
+}
   errorDiv.textContent = "";
 
   if (sesion.rol !== "Cobrador") {
@@ -2757,10 +3147,16 @@ async function guardarCobro() {
   boton.disabled = true;
   boton.textContent = "Preparando cobro...";
 
+guardandoCobroLocal = true;
+document.getElementById("pantallaDetalle").inert = true;
+
   try {
     const cliente = clienteActual;
     const usuario = sesion.usuario;
     const zona = sesion.zona;
+const inspector1 = sesion.inspector1;
+const inspector2 = sesion.inspector2;
+const fechaCaptura = new Date().toISOString();
 
     const pendientes = await obtenerPendientesOffline();
     const numeroFactura = usaFactura ? String(sesion.facturaActual) : "";
@@ -2784,9 +3180,14 @@ async function guardarCobro() {
       idCobro: generarIdCobroOffline(),
       codigo: cliente["CODIGO"],
       estado,
+fechaCaptura,
+zonaCaptura: zona,
+nombreCliente: cliente["Nombre Cliente"] || "",
+inspector1,
+inspector2,
       observaciones,
       usuarioLogin: usuario,
-      usuario: sesion.inspector1 + " / " + sesion.inspector2,
+      usuario: inspector1 + " / " + inspector2,
       numeroFactura,
       fotoFactura: usaFactura
         ? await leerArchivoBase64(fotoFacturaInput)
@@ -2839,6 +3240,7 @@ async function guardarCobro() {
     const ubicacion = await obtenerUbicacionActual();
 
     if (ubicacion.disponible) {
+datos.fechaGpsCaptura = ubicacion.fechaGpsCaptura;
       datos.latitud = ubicacion.latitud;
       datos.longitud = ubicacion.longitud;
       datos.precisionGps = ubicacion.precisionGps;
@@ -2854,84 +3256,46 @@ async function guardarCobro() {
       throw new Error("La sesión cambió. No se enviará este cobro.");
     }
 
-    let resultado = null;
-    let falloRed = null;
+        boton.textContent = "Guardando en el teléfono...";
 
-    if (navigator.onLine) {
-      boton.textContent = "Enviando...";
+    
 
-      try {
-        resultado = await llamarBackend("guardarCobro", datos);
-      } catch (error) {
-        if (!esErrorDeConexion(error)) throw error;
-        falloRed = error;
-      }
-    }
 
-    if (resultado) {
-      if (!resultado.exito) {
-        errorDiv.textContent =
-          resultado.mensaje || "El servidor rechazó el cobro.";
-        return;
-      }
-
-      if (resultado.idCobro !== datos.idCobro) {
-        throw new Error(
-          "El servidor no confirmó el mismo ID Cobro. " +
-          "Revisa Historial antes de reintentar."
-        );
-      }
-
-      if (usaFactura) {
-        sesion.facturaActual = resultado.siguienteFactura || null;
-      }
-
-      localStorage.setItem("sesionApp", JSON.stringify(sesion));
-      actualizarTextoFactura();
-
-      alert(
-        "Cobro confirmado en el servidor." +
-        (numeroFactura ? "\nFactura: " + numeroFactura : "")
-      );
-
-      cerrarDetalle();
-      cargarClientesParaCobro();
-      cargarAvanceDelDia();
-      atrasadosCargados = false;
-      return;
-    }
-
-    const pendiente = await crearPendienteDesdeFormulario(
-      datos,
-      datos.fotoFactura,
-      datos.fotoNotificacion
-    );
-
+    // La factura queda reservada en la copia local.
     if (usaFactura) {
       sesion.facturaActual = null;
     }
 
     localStorage.setItem("sesionApp", JSON.stringify(sesion));
+
     actualizarTextoFactura();
     await actualizarContadorPendientesOffline();
 
     alert(
       "Cobro guardado en este teléfono." +
-      (numeroFactura ? "\nFactura: " + numeroFactura : "") +
-      "\nPendiente de sincronizar." +
-      (falloRed
-        ? "\nEl envío anterior no pudo confirmarse; se conserva el mismo ID."
-        : "")
+      (pendiente.numeroFactura
+        ? "\nFactura: " + pendiente.numeroFactura
+        : "") +
+      "\nSe intentará sincronizar cuando haya conexión." +
+      "\nNo lo registres otra vez."
     );
 
+    document.getElementById("pantallaDetalle").inert = false;
+    guardandoCobroLocal = false;
+
     cerrarDetalle();
+    programarSincronizacionOffline();
 
   } catch (error) {
     console.error("Error al guardar cobro:", error);
+
     errorDiv.textContent =
       (error.message || "Error desconocido.") +
-      " No vuelvas a registrar este cobro sin revisar su estado.";
+      " Revisa Pendientes antes de volver a registrar este cobro.";
+
   } finally {
+    guardandoCobroLocal = false;
+    document.getElementById("pantallaDetalle").inert = false;
     boton.disabled = false;
     boton.textContent = "Guardar cobro";
   }
@@ -3507,6 +3871,35 @@ function cerrarUbicaciones() {
   document.getElementById("pantallaUbicaciones").classList.add("oculto");
   document.getElementById("pantallaPrincipal").classList.remove("oculto");
 }
+
+
+let temporizadorSincronizacion = null;
+
+function programarSincronizacionOffline() {
+  clearTimeout(temporizadorSincronizacion);
+
+  temporizadorSincronizacion = setTimeout(() => {
+    sincronizarPendientesOffline().catch(error => {
+      console.error("Error de sincronización:", error);
+    });
+  }, 1500);
+}
+
+window.addEventListener("online", programarSincronizacionOffline);
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    programarSincronizacionOffline();
+  }
+});
+
+setInterval(() => {
+  if (document.visibilityState === "visible" && navigator.onLine) {
+    programarSincronizacionOffline();
+  }
+}, 60000);
+
+
 </script>
 
 </body>
