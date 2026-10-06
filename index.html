@@ -3656,6 +3656,12 @@ async function descargarReporteExcel() {
   boton.disabled = true;
   boton.textContent = "Generando...";
 
+console.log("EXCEL: solicitando reporte", {
+  fecha: fecha,
+  zona: sesion.zona,
+  rol: sesion.rol
+});
+
   try {
     const resultado = await llamarBackend(
       "generarReporteCobros",
@@ -3666,6 +3672,12 @@ async function descargarReporteExcel() {
       }
     );
 
+console.log("EXCEL: respuesta recibida", {
+  exito: resultado?.exito,
+  mensaje: resultado?.mensaje,
+  url: resultado?.url
+});
+
     if (!resultado.exito) {
       alert(resultado.mensaje || "No se pudo generar el reporte.");
       return;
@@ -3674,10 +3686,13 @@ async function descargarReporteExcel() {
     window.open(resultado.url, "_blank");
 
   } catch (err) {
-    console.error("Error al generar Excel:", err);
-    alert("No se pudo generar el reporte Excel.");
+  console.error("Error al generar Excel:", err);
 
-  } finally {
+  alert(
+    "No se pudo generar el reporte Excel.\n\n" +
+    (err.message || "Error desconocido.")
+  );
+} finally {
     boton.disabled = false;
     boton.textContent = "Excel";
   }
