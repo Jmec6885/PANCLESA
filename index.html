@@ -748,7 +748,41 @@ async function llamarBackend(accion, datos) {
       signal: controlador.signal
     });
 
-    const resultado = await respuesta.json();
+    const textoRespuesta = await respuesta.text();
+
+if (!respuesta.ok) {
+  console.error("Error HTTP del backend", {
+    accion,
+    estado: respuesta.status,
+    redirigida: respuesta.redirected,
+    tipo: respuesta.headers.get("content-type")
+  });
+
+  throw new Error(
+    "La acción " + accion +
+    " recibió HTTP " + respuesta.status +
+    ". Revisa la implementación de Apps Script."
+  );
+}
+
+let resultado;
+
+try {
+  resultado = JSON.parse(textoRespuesta);
+} catch (error) {
+  console.error("Respuesta no JSON del backend", {
+    accion,
+    estado: respuesta.status,
+    redirigida: respuesta.redirected,
+    tipo: respuesta.headers.get("content-type"),
+    pareceHtml: /^\s*</.test(textoRespuesta)
+  });
+
+  throw new Error(
+    "La acción " + accion +
+    " recibió una página HTML o una respuesta inválida, no JSON."
+  );
+}
 
     if (resultado && resultado.sesionExpirada) {
       manejarSesionExpirada();
