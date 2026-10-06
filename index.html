@@ -3258,7 +3258,11 @@ datos.fechaGpsCaptura = ubicacion.fechaGpsCaptura;
 
         boton.textContent = "Guardando en el teléfono...";
 
-    
+    const pendiente = await crearPendienteDesdeFormulario(
+  datos,
+  datos.fotoFactura,
+  datos.fotoNotificacion
+);
 
 
     // La factura queda reservada en la copia local.
@@ -3287,11 +3291,13 @@ datos.fechaGpsCaptura = ubicacion.fechaGpsCaptura;
     programarSincronizacionOffline();
 
   } catch (error) {
-    console.error("Error al guardar cobro:", error);
+   console.error("Error al guardar cobro:", error);
 
-    errorDiv.textContent =
-      (error.message || "Error desconocido.") +
-      " Revisa Pendientes antes de volver a registrar este cobro.";
+errorDiv.textContent =
+  (error.stack || error.message || "Error desconocido.") +
+  "\nRevisa Pendientes antes de volver a registrar este cobro.";
+
+errorDiv.style.whiteSpace = "pre-wrap";
 
   } finally {
     guardandoCobroLocal = false;
