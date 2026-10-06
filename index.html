@@ -285,8 +285,109 @@
     border-radius: 6px;
   }
 </style>
+
+<style id="temaMeneses">
+:root {
+  --color-azul: #3b54d3;
+  --color-verde: #3ac99c;
+  --color-verde-oscuro: #14795b;
+  --color-texto: #243247;
+}
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  background: #eef1f4;
+  color: var(--color-texto);
+  height: auto;
+  min-height: 100vh;
+  padding: 86px 12px 24px;
+}
+body.modoApp { padding: 86px 0 24px; }
+#headerApp {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 1000;
+  display: flex; align-items: center; gap: 12px;
+  min-height: 70px;
+  padding: 12px 16px;
+  background: white;
+  box-shadow: 0 2px 10px rgba(30,45,80,.10);
+}
+#headerApp img { width: auto; max-width: 110px; height: 34px; object-fit: contain; }
+#headerApp .tituloApp {
+  font-size: 1.1rem; font-weight: 800; line-height: 1.25;
+  color: var(--color-azul);
+  background: linear-gradient(90deg,var(--color-azul),var(--color-verde-oscuro));
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+#headerApp .creditoApp { font-size: .72rem; color: #64748b; margin-top: 3px; }
+.caja { width: min(100%,380px); padding: 24px; border-radius: 16px; }
+h2, .tarjetaCliente .nombre { color: var(--color-azul); }
+#pantallaPrincipal, #pantallaDetalle, #pantallaPendientesOffline,
+#pantallaFacturas, #pantallaLiberar, #pantallaAgregar,
+#pantallaUsuarios, #pantallaUbicaciones {
+  max-width: 600px; width: 100%; margin: 0 auto; padding: 12px;
+}
+.tarjetaCliente {
+  border: 1px solid #e3e8f0;
+  border-radius: 14px;
+  box-shadow: 0 3px 12px rgba(30,45,80,.06);
+}
+input,select,textarea {
+  border: 1px solid #cbd5e1; border-radius: 9px; font-size: 16px;
+  background: white; color: var(--color-texto);
+}
+input:focus,select:focus,textarea:focus {
+  outline: 2px solid var(--color-azul); outline-offset: 1px;
+}
+input:disabled { background: #f1f5f9; color: #475569; }
+button {
+  border-radius: 9px; background: var(--color-azul);
+  font-weight: 600; min-height: 42px;
+}
+button:disabled { background: #94a3b8 !important; cursor: default; }
+.botonVolver { color: var(--color-azul); background: transparent; }
+.botonPestana { background: #e2e8f0; color: #334155; }
+.botonPestana.activa { background: var(--color-azul); color: white; }
+.botonCerrarSesion { background: #b42332; }
+#botonLogin,#botonGuardarCobro,#botonSincronizarOffline,
+#botonActualizarGeneral {
+  background: linear-gradient(135deg,var(--color-azul),#177e78) !important;
+  color: white;
+}
+#botonPrepararOffline,#botonAgregarCliente,#botonReporteExcel {
+  background: var(--color-verde-oscuro) !important;
+}
+#botonPendientesOffline { background: #a45a0b !important; }
+#botonUbicaciones { background: #0b7490 !important; }
+#botonLiberarClientes,#botonFacturas { background: var(--color-azul) !important; }
+#botonGestionUsuarios { background: #6952ad !important; }
+#filaFactura .botonCerrarSesion { background: var(--color-azul) !important; }
+.badgeFoto { background: #d9f5e9; color: #14563f; }
+.badgePendiente { background: #fff0cf; color: #7d4b09; }
+.error { color: #b42332; overflow-wrap: anywhere; }
+#estadoSincronizacion { padding: 10px 0; overflow-wrap: anywhere; }
+#estadoOffline { font-size: 13px; line-height: 1.5; padding: 12px; }
+@media (max-width: 380px) {
+  #headerApp { gap: 8px; padding: 12px; }
+  #headerApp img { max-width: 85px; }
+  #headerApp .tituloApp { font-size: 1rem; }
+}
+</style>
+
 </head>
 <body>
+
+<header id="headerApp">
+  <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png"
+       alt="Logo CLESA" onerror="this.style.display='none'">
+  <div>
+    <div class="tituloApp">App de Cobros</div>
+    <div class="creditoApp">By. Jose Meneses</div>
+  </div>
+</header>
+
 
 <div class="caja">
 
