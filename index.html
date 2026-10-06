@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>App de Cobros</title>
-<!-- VERSION_APP: v14-coordinador -->
+<!-- VERSION_APP: v15-mapa-coordinador -->
 <style>
   body {
     font-family: Arial, sans-serif;
@@ -336,6 +336,13 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     <h2>Resumen de coordinación</h2>
     <div class="fila">Consulta global · Sonsonate, Santa Ana y Ahuachapan</div>
     <button type="button" id="botonActualizarCoordinador" onclick="cargarResumenCoordinador()">Actualizar resumen</button>
+    <button
+  type="button"
+  id="botonMapaCoordinador"
+  onclick="abrirUbicaciones()"
+>
+  Ver mapa de cobros
+</button>
     <div id="estadoCoordinador" class="fila" role="status"></div>
     <label class="etiquetaCampo" for="zonaCoordinador">Zona a visualizar</label>
     <select id="zonaCoordinador" onchange="pintarResumenCoordinador()">
@@ -356,13 +363,7 @@ button:disabled{background:#94a3b8!important;cursor:default;}
       <label class="etiquetaCampo" for="fechaCoordinador">Fecha del avance</label>
       <input type="date" id="fechaCoordinador">
       <button type="button" onclick="cargarResumenCoordinador()">Consultar fecha</button>
-<button
-  type="button"
-  id="botonMapaCoordinador"
-  onclick="abrirUbicaciones()"
->
-  Ver mapa de cobros
-</button>
+
       <label class="etiquetaCampo" for="fechasActividadCoordinador">Fechas con actividad registrada</label>
       <select id="fechasActividadCoordinador" onchange="seleccionarFechaActividadCoordinador()"></select>
       <div class="fila" id="fechaResultadoCoordinador"></div>
@@ -414,7 +415,7 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     <span id="textoSesion"></span>
     <button onclick="cerrarSesion()" class="botonCerrarSesion">Cerrar sesión</button>
   </div>
-  <div style="text-align:right; font-size:10px; color:#aaa;">v14-coordinador</div>
+  <div style="text-align:right; font-size:10px; color:#aaa;">v15-mapa-coordinador</div>
   <div class="barraAcciones" id="barraAcciones">
 
   <button
