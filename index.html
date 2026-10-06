@@ -2396,8 +2396,48 @@ function filtrarClientes() {
     }
     const kw = Number(cliente["KW Pendiente"]) || 0;
     if (kw > 0) badge("badgePendiente", "KW pendiente: " + kw);
-    if (cliente["Foto Factura"]) badge("badgeFoto", "Foto factura");
-    if (cliente["Foto Notificacion"]) badge("badgeFoto", "Foto notificación");
+    function enlaceFoto(etiqueta, valor) {
+  const texto = String(valor || "").trim();
+  if (!texto) return;
+
+  let url;
+
+  try {
+    url = new URL(texto);
+
+    if (
+      url.protocol !== "https:" ||
+      !["drive.google.com", "docs.google.com"].includes(url.hostname)
+    ) {
+      return;
+    }
+  } catch (error) {
+    return;
+  }
+
+  const enlace = document.createElement("a");
+  enlace.className = "badge badgeFoto";
+  enlace.textContent = etiqueta;
+  enlace.href = url.href;
+  enlace.target = "_blank";
+  enlace.rel = "noopener noreferrer";
+
+  enlace.addEventListener("click", evento => {
+    evento.stopPropagation();
+  });
+
+  badges.appendChild(enlace);
+}
+
+enlaceFoto(
+  "Abrir foto de factura",
+  cliente["Foto Factura"]
+);
+
+enlaceFoto(
+  "Abrir foto de notificación",
+  cliente["Foto Notificacion"]
+);
     tarjeta.appendChild(badges);
     if (["Contador", "Supervisor", "Administrador"].includes(sesion.rol)) {
       const boton = document.createElement("button");
