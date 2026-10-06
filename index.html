@@ -356,6 +356,13 @@ button:disabled{background:#94a3b8!important;cursor:default;}
       <label class="etiquetaCampo" for="fechaCoordinador">Fecha del avance</label>
       <input type="date" id="fechaCoordinador">
       <button type="button" onclick="cargarResumenCoordinador()">Consultar fecha</button>
+<button
+  type="button"
+  id="botonMapaCoordinador"
+  onclick="abrirUbicaciones()"
+>
+  Ver mapa de cobros
+</button>
       <label class="etiquetaCampo" for="fechasActividadCoordinador">Fechas con actividad registrada</label>
       <select id="fechasActividadCoordinador" onchange="seleccionarFechaActividadCoordinador()"></select>
       <div class="fila" id="fechaResultadoCoordinador"></div>
@@ -4128,7 +4135,8 @@ function pintarMapaUbicaciones(ubicaciones) {
 async function abrirUbicaciones() {
   const permitido = [
     "Supervisor",
-    "Administrador"
+    "Administrador",
+    "Coordinador"
   ].includes(sesion.rol);
 
   if (!permitido) {
@@ -4136,31 +4144,47 @@ async function abrirUbicaciones() {
     return;
   }
 
-  const fecha = document.getElementById(
-    "campoFechaAvance"
-  ).value || obtenerFechaLocalISO();
+  const esCoordinador = sesion.rol === "Coordinador";
+
+  const fecha = esCoordinador
+    ? document.getElementById("fechaCoordinador").value
+    : (
+        document.getElementById("campoFechaAvance").value ||
+        obtenerFechaLocalISO()
+      );
+
+  const zona = esCoordinador
+    ? document.getElementById("zonaCoordinador").value
+    : (sesion.zona || "");
+
+  if (!fecha) {
+    alert("Selecciona una fecha antes de abrir el mapa.");
+    return;
+  }
 
   document.getElementById("pantallaPrincipal")
-    .classList
-    .add("oculto");
+    .classList.add("oculto");
+
+  if (esCoordinador) {
+    document.getElementById("pantallaCoordinador")
+      .classList.add("oculto");
+  }
 
   document.getElementById("pantallaUbicaciones")
-    .classList
-    .remove("oculto");
+    .classList.remove("oculto");
 
-  document.getElementById("textoFechaUbicaciones")
-    .textContent = "Fecha consultada: " + fecha;
+  document.getElementById("textoFechaUbicaciones").textContent =
+    "Fecha consultada: " + fecha +
+    " · Zona: " + (zona || "Todas las zonas");
 
-  const cargando = document.getElementById(
-    "cargandoUbicaciones"
-  );
-
-  const lista = document.getElementById(
-    "listaUbicaciones"
-  );
+  const cargando = document.getElementById("cargandoUbicaciones");
+  const lista = document.getElementById("listaUbicaciones");
 
   cargando.classList.remove("oculto");
-  lista.innerHTML = "";
+  lista.replaceChildren();
+
+  // Limpia el mapa de la consulta anterior.
+  pintarMapaUbicaciones([]);
 
   try {
     const resultado = await llamarBackend(
@@ -4168,25 +4192,76 @@ async function abrirUbicaciones() {
       {
         usuarioSolicitante: sesion.usuario,
         fecha: fecha,
-        zona: sesion.zona || ""
+        zona: zona
       }
     );
 
-    if (!resultado.exito) {
+    if (!resultado || !resultado.exito) {
       throw new Error(
-        resultado.mensaje || "No se pudieron obtener ubicaciones."
+        resultado?.mensaje ||
+        "No se pudieron obtener ubicaciones."
+      );
+    }
+
+    if (!Array.isArray(resultado.ubicaciones)) {
+      throw new Error(
+        "El servidor no devolvió una lista válida de ubicaciones."
       );
     }
 
     const ubicaciones = resultado.ubicaciones;
-pintarMapaUbicaciones(ubicaciones);
+
+    // Protección visual adicional para Coordinador.
+    // El GS también debe filtrar los datos antes de enviarlos.
+    const ubicacionesParaMapa = esCoordinador
+      ? ubicaciones.map(item => ({
+          cliente: "Registro de cobro",
+          codigo: "",
+          zona: item.zona,
+          pareja: item.pareja,
+          monto: item.monto,
+          latitud: item.latitud,
+          longitud: item.longitud,
+          precisionGps: item.precisionGps,
+          hora: item.hora
+        }))
+      : ubicaciones;
+
+    pintarMapaUbicaciones(ubicacionesParaMapa);
+
+    if (esCoordinador) {
+      const resumen = document.createElement("div");
+      resumen.className = "tarjetaCliente";
+
+      const titulo = document.createElement("div");
+      titulo.className = "nombre";
+      titulo.textContent = "Resumen de ubicaciones";
+
+      const detalle = document.createElement("div");
+      detalle.className = "fila";
+      detalle.textContent = ubicaciones.length
+        ? "Registros con GPS: " + ubicaciones.length
+        : "No hay ubicaciones GPS disponibles para esta fecha y zona.";
+
+      const aviso = document.createElement("div");
+      aviso.className = "fila";
+      aviso.textContent =
+        "El mapa no muestra nombres ni códigos de clientes. " +
+        "Solo incluye registros con ubicación GPS.";
+
+      resumen.append(titulo, detalle, aviso);
+      lista.appendChild(resumen);
+
+      return;
+    }
 
     if (ubicaciones.length === 0) {
-      lista.innerHTML =
-        '<div class="mensajeCentro">' +
-        "No hay ubicaciones GPS disponibles para esta fecha." +
-        "</div>";
+      const aviso = document.createElement("div");
+      aviso.className = "mensajeCentro";
+      aviso.textContent =
+        "No hay ubicaciones GPS disponibles para esta fecha y zona.";
 
+      lista.appendChild(aviso);
       return;
     }
 
@@ -4194,53 +4269,90 @@ pintarMapaUbicaciones(ubicaciones);
       const tarjeta = document.createElement("div");
       tarjeta.className = "tarjetaCliente";
 
+      const monto = Number(item.monto);
+      const precision = Number(item.precisionGps);
+
+      const montoTexto = Number.isFinite(monto)
+        ? monto.toFixed(2)
+        : "0.00";
+
+      const precisionTexto = Number.isFinite(precision)
+        ? precision.toFixed(0) + " m"
+        : "No disponible";
+
       const urlMapa =
         "https://www.google.com/maps?q=" +
-        encodeURIComponent(item.latitud + "," + item.longitud);
+        encodeURIComponent(
+          item.latitud + "," + item.longitud
+        );
 
       tarjeta.innerHTML = `
-        <div class="codigo">${escaparHtml(item.codigo)}</div>
-        <div class="nombre">${escaparHtml(item.cliente)}</div>
+        <div class="codigo">
+          ${escaparHtml(item.codigo || "")}
+        </div>
+
+        <div class="nombre">
+          ${escaparHtml(item.cliente || "")}
+        </div>
+
+        <div class="fila">
+          <span class="etiqueta">Zona:</span>
+          ${escaparHtml(item.zona || "")}
+        </div>
+
         <div class="fila">
           <span class="etiqueta">Pareja:</span>
-          ${escaparHtml(item.pareja)}
+          ${escaparHtml(item.pareja || "")}
         </div>
+
         <div class="fila">
           <span class="etiqueta">Hora:</span>
-          ${escaparHtml(item.hora)}
+          ${escaparHtml(item.hora || "-")}
           ·
           <span class="etiqueta">Monto:</span>
-          $${Number(item.monto).toFixed(2)}
+          $${montoTexto}
         </div>
+
         <div class="fila">
           <span class="etiqueta">Precisión GPS:</span>
-          ${Number(item.precisionGps).toFixed(0)} m
+          ${precisionTexto}
         </div>
-        <button class="botonLiberarUno">
+
+        <button type="button" class="botonLiberarUno">
           Abrir en Google Maps
         </button>
       `;
 
       tarjeta.querySelector(".botonLiberarUno")
         .addEventListener("click", () => {
-          window.open(urlMapa, "_blank");
+          window.open(
+            urlMapa,
+            "_blank",
+            "noopener,noreferrer"
+          );
         });
 
       lista.appendChild(tarjeta);
     });
 
-  } catch (err) {
-    console.error("Error al cargar ubicaciones:", err);
+  } catch (error) {
+    console.error("Error al cargar ubicaciones:", error);
 
-    lista.innerHTML =
-      '<div class="mensajeCentro">' +
-      escaparHtml(err.message || "No se pudieron cargar las ubicaciones.") +
-      "</div>";
+    pintarMapaUbicaciones([]);
+
+    const aviso = document.createElement("div");
+    aviso.className = "mensajeCentro";
+    aviso.textContent =
+      error.message ||
+      "No se pudieron cargar las ubicaciones.";
+
+    lista.replaceChildren(aviso);
 
   } finally {
     cargando.classList.add("oculto");
   }
 }
+
 
 function formatearFechaCobro(valor) {
   if (!valor) return "Sin cobros anteriores";
@@ -4285,6 +4397,12 @@ function cerrarUbicaciones() {
   document.getElementById("mapaUbicaciones").classList.add("oculto");
   document.getElementById("mensajeMapaUbicaciones").classList.add("oculto");
   document.getElementById("pantallaUbicaciones").classList.add("oculto");
+
+if (sesion.rol === "Coordinador") {
+  document.getElementById("pantallaCoordinador")
+    .classList.remove("oculto");
+  return;
+}
   document.getElementById("pantallaPrincipal").classList.remove("oculto");
 }
 
