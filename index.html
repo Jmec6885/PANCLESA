@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>App de Cobros</title>
-<!-- VERSION_APP: v11 -->
+<!-- VERSION_APP: v13-sesion-unica -->
 <style>
   body {
     font-family: Arial, sans-serif;
@@ -285,109 +285,41 @@
     border-radius: 6px;
   }
 </style>
-
 <style id="temaMeneses">
-:root {
-  --color-azul: #3b54d3;
-  --color-verde: #3ac99c;
-  --color-verde-oscuro: #14795b;
-  --color-texto: #243247;
-}
-* { box-sizing: border-box; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-  background: #eef1f4;
-  color: var(--color-texto);
-  height: auto;
-  min-height: 100vh;
-  padding: 86px 12px 24px;
-}
-body.modoApp { padding: 86px 0 24px; }
-#headerApp {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  z-index: 1000;
-  display: flex; align-items: center; gap: 12px;
-  min-height: 70px;
-  padding: 12px 16px;
-  background: white;
-  box-shadow: 0 2px 10px rgba(30,45,80,.10);
-}
-#headerApp img { width: auto; max-width: 110px; height: 34px; object-fit: contain; }
-#headerApp .tituloApp {
-  font-size: 1.1rem; font-weight: 800; line-height: 1.25;
-  color: var(--color-azul);
-  background: linear-gradient(90deg,var(--color-azul),var(--color-verde-oscuro));
-  -webkit-background-clip: text; background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-#headerApp .creditoApp { font-size: .72rem; color: #64748b; margin-top: 3px; }
-.caja { width: min(100%,380px); padding: 24px; border-radius: 16px; }
-h2, .tarjetaCliente .nombre { color: var(--color-azul); }
-#pantallaPrincipal, #pantallaDetalle, #pantallaPendientesOffline,
-#pantallaFacturas, #pantallaLiberar, #pantallaAgregar,
-#pantallaUsuarios, #pantallaUbicaciones {
-  max-width: 600px; width: 100%; margin: 0 auto; padding: 12px;
-}
-.tarjetaCliente {
-  border: 1px solid #e3e8f0;
-  border-radius: 14px;
-  box-shadow: 0 3px 12px rgba(30,45,80,.06);
-}
-input,select,textarea {
-  border: 1px solid #cbd5e1; border-radius: 9px; font-size: 16px;
-  background: white; color: var(--color-texto);
-}
-input:focus,select:focus,textarea:focus {
-  outline: 2px solid var(--color-azul); outline-offset: 1px;
-}
-input:disabled { background: #f1f5f9; color: #475569; }
-button {
-  border-radius: 9px; background: var(--color-azul);
-  font-weight: 600; min-height: 42px;
-}
-button:disabled { background: #94a3b8 !important; cursor: default; }
-.botonVolver { color: var(--color-azul); background: transparent; }
-.botonPestana { background: #e2e8f0; color: #334155; }
-.botonPestana.activa { background: var(--color-azul); color: white; }
-.botonCerrarSesion { background: #b42332; }
-#botonLogin,#botonGuardarCobro,#botonSincronizarOffline,
-#botonActualizarGeneral {
-  background: linear-gradient(135deg,var(--color-azul),#177e78) !important;
-  color: white;
-}
-#botonPrepararOffline,#botonAgregarCliente,#botonReporteExcel {
-  background: var(--color-verde-oscuro) !important;
-}
-#botonPendientesOffline { background: #a45a0b !important; }
-#botonUbicaciones { background: #0b7490 !important; }
-#botonLiberarClientes,#botonFacturas { background: var(--color-azul) !important; }
-#botonGestionUsuarios { background: #6952ad !important; }
-#filaFactura .botonCerrarSesion { background: var(--color-azul) !important; }
-.badgeFoto { background: #d9f5e9; color: #14563f; }
-.badgePendiente { background: #fff0cf; color: #7d4b09; }
-.error { color: #b42332; overflow-wrap: anywhere; }
-#estadoSincronizacion { padding: 10px 0; overflow-wrap: anywhere; }
-#estadoOffline { font-size: 13px; line-height: 1.5; padding: 12px; }
-@media (max-width: 380px) {
-  #headerApp { gap: 8px; padding: 12px; }
-  #headerApp img { max-width: 85px; }
-  #headerApp .tituloApp { font-size: 1rem; }
-}
+:root{--color-azul:#3b54d3;--color-verde:#3ac99c;--verde-oscuro:#14795b;}
+*{box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:#eef1f4;color:#243247;height:auto;min-height:100vh;padding:86px 12px 24px;}
+body.modoApp{padding:86px 0 24px;}
+#headerApp{position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;align-items:center;gap:12px;min-height:70px;padding:12px 16px;background:white;box-shadow:0 2px 10px #1e2d501a;}
+#headerApp img{width:auto;max-width:110px;height:34px;object-fit:contain;}
+#headerApp .tituloApp{font-size:1.1rem;font-weight:800;color:var(--color-azul);background:linear-gradient(90deg,var(--color-azul),var(--verde-oscuro));background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+#headerApp .creditoApp{font-size:.72rem;color:#64748b;margin-top:3px;}
+.caja{width:min(100%,380px);padding:24px;border-radius:16px;}
+h2,.tarjetaCliente .nombre{color:var(--color-azul);}
+#pantallaPrincipal,#pantallaDetalle,#pantallaPendientesOffline,#pantallaFacturas,#pantallaLiberar,#pantallaAgregar,#pantallaUsuarios,#pantallaUbicaciones{max-width:600px;width:100%;margin:0 auto;padding:12px;}
+.tarjetaCliente{border:1px solid #e3e8f0;border-radius:14px;box-shadow:0 3px 12px #1e2d500f;}
+input,select,textarea{border:1px solid #cbd5e1;border-radius:9px;font-size:16px;background:white;color:#243247;}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--color-azul);outline-offset:1px;}
+input:disabled{background:#f1f5f9;color:#475569;}
+button{border-radius:9px;background:var(--color-azul);font-weight:600;min-height:42px;}
+button:disabled{background:#94a3b8!important;cursor:default;}
+.botonVolver{color:var(--color-azul);background:transparent;}
+.botonPestana{background:#e2e8f0;color:#334155;}.botonPestana.activa{background:var(--color-azul);color:white;}
+.botonCerrarSesion{background:#b42332;}
+#botonLogin,#botonGuardarCobro,#botonSincronizarOffline,#botonActualizarGeneral{background:linear-gradient(135deg,var(--color-azul),#177e78)!important;color:white;}
+#botonPrepararOffline,#botonAgregarCliente,#botonReporteExcel{background:var(--verde-oscuro)!important;}
+#botonPendientesOffline{background:#a45a0b!important;}#botonUbicaciones{background:#0b7490!important;}
+#botonLiberarClientes,#botonFacturas,#filaFactura .botonCerrarSesion{background:var(--color-azul)!important;}
+#botonGestionUsuarios{background:#6952ad!important;}
+.badgeFoto{background:#d9f5e9;color:#14563f;}.badgePendiente{background:#fff0cf;color:#7d4b09;}
+.error{color:#b42332;overflow-wrap:anywhere;}#estadoSincronizacion{padding:10px 0;overflow-wrap:anywhere;}
+#estadoOffline{font-size:13px;line-height:1.5;padding:12px;}
+#avisoSesionUnica{position:fixed;bottom:12px;left:12px;right:12px;z-index:2000;max-height:45vh;overflow:auto;padding:16px;border:2px solid #b42332;border-radius:12px;background:#fff6f6;color:#8f1d29;box-shadow:0 4px 20px #0003;}
+@media(max-width:380px){#headerApp{gap:8px;padding:12px;}#headerApp img{max-width:85px;}#headerApp .tituloApp{font-size:1rem;}}
 </style>
-
 </head>
 <body>
-
-<header id="headerApp">
-  <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png"
-       alt="Logo CLESA" onerror="this.style.display='none'">
-  <div>
-    <div class="tituloApp">App de Cobros</div>
-    <div class="creditoApp">By. Jose Meneses</div>
-  </div>
-</header>
-
+<header id="headerApp"><img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" onerror="this.style.display='none'"><div><div class="tituloApp">App de Cobros</div><div class="creditoApp">By. Jose Meneses</div></div></header>
 
 <div class="caja">
 
@@ -425,7 +357,7 @@ button:disabled { background: #94a3b8 !important; cursor: default; }
     <span id="textoSesion"></span>
     <button onclick="cerrarSesion()" class="botonCerrarSesion">Cerrar sesión</button>
   </div>
-  <div style="text-align:right; font-size:10px; color:#aaa;">v10</div>
+  <div style="text-align:right; font-size:10px; color:#aaa;">v13-sesion-unica</div>
   <div class="barraAcciones" id="barraAcciones">
 
   <button
@@ -897,7 +829,7 @@ try {
 }
 
     if (resultado && resultado.sesionExpirada) {
-      manejarSesionExpirada();
+      manejarSesionExpirada(resultado);
       throw new Error(resultado.mensaje || "Sesión expirada.");
     }
 
@@ -907,13 +839,38 @@ try {
   }
 }
 
-function manejarSesionExpirada() {
+function manejarSesionExpirada(resultado = {}) {
+  if (sesionBloqueada) return;
+  sesionBloqueada = true;
+  sesion.token = null;
   localStorage.removeItem("sesionApp");
-  localStorage.removeItem("clientesParaCobro");
-  localStorage.removeItem("listaPrecios");
-  alert("Tu sesión expiró. Inicia sesión de nuevo.");
-  location.reload();
+  clearTimeout(temporizadorSincronizacion);
+
+  const aviso = document.createElement("div");
+  aviso.id = "avisoSesionUnica";
+  aviso.setAttribute("role", "alert");
+  const texto = document.createElement("p");
+  texto.textContent = resultado.mensaje ||
+    "Tu sesión ya no es válida. Los pendientes locales se conservan.";
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.textContent = "Volver al inicio de sesión";
+  boton.onclick = () => {
+    if (guardandoCobroLocal || sincronizacionEnCurso) {
+      alert("Espera a que termine el guardado local o la sincronización.");
+      return;
+    }
+    const detalle = document.getElementById("pantallaDetalle");
+    if (detalle && !detalle.classList.contains("oculto") &&
+        !confirm("Los cambios de este formulario que no guardaste se perderán. Los pendientes guardados se conservan. ¿Volver al login?")) {
+      return;
+    }
+    location.reload();
+  };
+  aviso.append(texto,boton);
+  document.body.appendChild(aviso);
 }
+
 
 function escaparHtml(valor) {
   return String(valor ?? "")
@@ -941,10 +898,27 @@ async function intentarLogin() {
   boton.textContent = "Verificando...";
 
   try {
-    const resultado = await llamarBackend("login", {
-      usuario,
-      contrasena
-    });
+    let resultado = await llamarBackend("login", {usuario, contrasena});
+
+    if (resultado.sesionExistente) {
+      if (!confirm(resultado.mensaje)) {
+        errorDiv.textContent = "Ingreso cancelado. La sesión anterior sigue activa.";
+        boton.disabled = false;
+        boton.textContent = "Entrar";
+        return;
+      }
+      resultado = await llamarBackend("login", {
+        usuario, contrasena,
+        reemplazarSesion: true,
+        confirmacionSesion: resultado.confirmacionSesion
+      });
+      if (resultado.sesionExistente) {
+        errorDiv.textContent = "La sesión cambió durante la confirmación. Intenta entrar nuevamente.";
+        boton.disabled = false;
+        boton.textContent = "Entrar";
+        return;
+      }
+    }
 
     if (!resultado.exito) {
       errorDiv.textContent = resultado.mensaje || "Usuario o contraseña incorrectos";
@@ -953,7 +927,12 @@ async function intentarLogin() {
       return;
     }
 
-    sesion.usuario = usuario;
+    sesionBloqueada = false;
+    document.getElementById("avisoSesionUnica")?.remove();
+    localStorage.removeItem("clientesParaCobro");
+    localStorage.removeItem("listaPrecios");
+    listaPrecios = [];
+    sesion.usuario = resultado.usuario || usuario;
            sesion.token = String(resultado.token || "");
     sesion.rol = String(resultado.rol || "").trim();
     sesion.zona = String(resultado.zona || "").trim();
@@ -3124,6 +3103,7 @@ async function pedirBackendParaSincronizar(accion, datos, identidad) {
       throw new Error("Respuesta del servidor incompleta.");
     }
 
+    if (resultado.sesionExpirada) manejarSesionExpirada(resultado);
     return resultado;
   } finally {
     clearTimeout(limite);
@@ -3317,6 +3297,7 @@ async function ejecutarColaOffline(identidad) {
 }
 
 async function sincronizarPendientesOffline() {
+  if (sesionBloqueada) return;
   if (
     sincronizacionEnCurso ||
     guardandoCobroLocal ||
@@ -3398,6 +3379,10 @@ await actualizarContadorPendientesOffline();
 }
 
 async function guardarCobro() {
+  if (sesionBloqueada) {
+    alert("La sesión fue cerrada. Inicia sesión otra vez; no se borraron los pendientes.");
+    return;
+  }
   const errorDiv = document.getElementById("errorDetalle");
   const boton = document.getElementById("botonGuardarCobro");
 
@@ -4242,6 +4227,37 @@ setInterval(() => {
 }, 60000);
 
 
+
+let sesionBloqueada = false;
+let comprobandoSesion = false;
+async function verificarSesionActual() {
+  if (comprobandoSesion || sesionBloqueada || !navigator.onLine || !sesion.token ||
+      guardandoCobroLocal || sincronizacionEnCurso || document.visibilityState !== "visible") return;
+  comprobandoSesion = true;
+  const identidad = {usuario:sesion.usuario,zona:sesion.zona,token:sesion.token};
+  const controlador = new AbortController();
+  const limite = setTimeout(() => controlador.abort(),15000);
+  try {
+    const r = await fetch(URL_APPS_SCRIPT, {
+      method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify({accion:"verificarSesion",token:identidad.token}),
+      signal:controlador.signal
+    });
+    if (!r.ok) return;
+    const resultado = await r.json();
+    if (sesion.token !== identidad.token) return;
+    if (resultado.sesionExpirada) manejarSesionExpirada(resultado);
+  } catch (error) {
+    console.warn("No se pudo comprobar la sesión; se mantiene la copia local.");
+  } finally {
+    clearTimeout(limite);
+    comprobandoSesion = false;
+  }
+}
+window.addEventListener("online",verificarSesionActual);
+document.addEventListener("visibilitychange",verificarSesionActual);
+window.addEventListener("DOMContentLoaded",verificarSesionActual);
+setInterval(verificarSesionActual,30000);
 </script>
 
 </body>
