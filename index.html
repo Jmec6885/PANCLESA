@@ -1005,42 +1005,254 @@ function confirmarFacturaInicial() {
   guardarSesionYContinuar();
 }
 
-async function cambiarFacturaInicial() {
-  let disponibles;
+let actualizandoFactura = false;
 
-  try {
-    const r = await llamarBackend("facturasDisponibles", {});
-    if (!r.exito) throw new Error(r.mensaje);
-    disponibles = r.disponibles;
-  } catch (err) {
-    alert("Sin conexión, no se pudieron cargar las facturas. Intenta con señal.");
-    return;
+async function obtenerFacturasRegistradasLocalmente(usuario, zona) {
+  const bd = await abrirBaseOffline();
+
+  return new Promise((resolve, reject) => {
+    let registros = [];
+
+    try {
+      const tx = bd.transaction(
+        TABLA_PENDIENTES_OFFLINE,
+        "readonly"
+      );
+
+      const solicitud = tx
+        .objectStore(TABLA_PENDIENTES_OFFLINE)
+        .getAll();
+
+      solicitud.onsuccess = () => {
+        registros = solicitud.result || [];
+      };
+
+      tx.oncomplete = () => {
+        bd.close();
+
+        const numeros = registros
+          .filter(p =>
+            p.usuario === usuario &&
+            p.zona === zona &&
+            p.numeroFactura
+          )
+          .map(p => Number(p.numeroFactura))
+          .filter(n => Number.isSafeInteger(n) && n > 0);
+
+        resolve(new Set(numeros));
+      };
+
+      tx.onabort = () => {
+        const error = tx.error ||
+          new Error("No se pudieron leer las facturas locales.");
+        bd.close();
+        reject(error);
+      };
+    } catch (error) {
+      bd.close();
+      reject(error);
+    }
+  });
+}
+
+async function obtenerFacturasDisponiblesSeguras() {
+  const usuario = sesion.usuario;
+  const zona = sesion.zona;
+  const token = sesion.token;
+
+  if (sesion.rol !== "Cobrador" || !usuario || !zona) {
+    throw new Error("No se identificó la sesión del Cobrador.");
   }
 
-  if (disponibles.length === 0) {
-    alert("No hay facturas disponibles. Pide al contador que asigne un rango.");
-    return;
+  let numeros;
+  let paquete = obtenerPaqueteOffline();
+
+  const paquetePropio =
+    paquete &&
+    paquete.usuario === usuario &&
+    paquete.zona === zona;
+
+  if (navigator.onLine) {
+    const respuesta = await llamarBackend(
+      "facturasDisponibles",
+      {}
+    );
+
+    if (
+      !respuesta ||
+      !respuesta.exito ||
+      !Array.isArray(respuesta.disponibles)
+    ) {
+      throw new Error(
+        respuesta?.mensaje ||
+        "No se pudieron comprobar las facturas en el servidor."
+      );
+    }
+
+    numeros = respuesta.disponibles;
+  } else {
+    if (!paquetePropio) {
+      throw new Error(
+        "No tienes un talonario preparado para este usuario y zona."
+      );
+    }
+
+    numeros = paquete.facturas;
   }
 
-  const nuevo = prompt(
-    "Facturas disponibles: " + describirDisponibles(disponibles) +
-    "\n\nEscribe el número con el que quieres continuar:",
-    sesion.facturaActual || ""
+  const locales = await obtenerFacturasRegistradasLocalmente(
+    usuario,
+    zona
   );
 
-  if (!nuevo || !nuevo.trim()) return;
+  if (
+    sesion.usuario !== usuario ||
+    sesion.zona !== zona ||
+    sesion.token !== token
+  ) {
+    throw new Error("La sesión cambió durante la consulta.");
+  }
 
-  const numero = Number(nuevo.trim());
+  const disponibles = [...new Set(numeros.map(Number))]
+    .filter(n =>
+      Number.isSafeInteger(n) &&
+      n > 0 &&
+      !locales.has(n)
+    )
+    .sort((a, b) => a - b);
 
-  if (!disponibles.includes(numero)) {
-    alert("Ese número no está disponible.");
+  // Solo actualiza el paquete si ya estaba preparado
+  // para el mismo usuario y zona.
+  if (navigator.onLine && paquetePropio) {
+    paquete.facturas = disponibles.map(String);
+    paquete.facturasActualizadasEn = new Date().toISOString();
+
+    localStorage.setItem(
+      CLAVE_PAQUETE_OFFLINE,
+      JSON.stringify(paquete)
+    );
+
+    actualizarEstadoOffline();
+  }
+
+  return disponibles;
+}
+
+async function asegurarFacturaActual() {
+  if (
+    actualizandoFactura ||
+    guardandoCobroLocal ||
+    sesion.rol !== "Cobrador"
+  ) {
     return;
   }
 
-  sesion.facturaActual = String(numero);
-  localStorage.setItem("sesionApp", JSON.stringify(sesion));
-  actualizarTextoFactura();
+  const detalle = document.getElementById("pantallaDetalle");
+
+  // No cambiar el número de un formulario ya abierto.
+  if (detalle && !detalle.classList.contains("oculto")) {
+    return;
+  }
+
+  actualizandoFactura = true;
+
+  try {
+    const disponibles = await obtenerFacturasDisponiblesSeguras();
+    const actual = Number(sesion.facturaActual);
+
+    // Conserva una selección válida.
+    if (
+      sesion.facturaActual &&
+      disponibles.includes(actual)
+    ) {
+      actualizarTextoFactura();
+      return;
+    }
+
+    const ultima = Number(sesion.ultimaFacturaLocal || 0);
+
+    const siguiente = ultima > 0
+      ? disponibles.find(n => n > ultima)
+      : disponibles[0];
+
+    sesion.facturaActual = siguiente
+      ? String(siguiente)
+      : null;
+
+    localStorage.setItem(
+      "sesionApp",
+      JSON.stringify(sesion)
+    );
+
+    actualizarTextoFactura();
+  } finally {
+    actualizandoFactura = false;
+  }
 }
+
+async function cambiarFacturaInicial() {
+  if (
+    guardandoCobroLocal ||
+    sincronizacionEnCurso ||
+    actualizandoFactura
+  ) {
+    alert("Espera a que termine la operación actual.");
+    return;
+  }
+
+  actualizandoFactura = true;
+
+  try {
+    const disponibles = await obtenerFacturasDisponiblesSeguras();
+
+    if (!disponibles.length) {
+      alert(
+        navigator.onLine
+          ? "No hay facturas disponibles para tu usuario."
+          : "No quedan facturas disponibles en el paquete offline."
+      );
+      return;
+    }
+
+    const nuevo = prompt(
+      "Facturas disponibles: " +
+      describirDisponibles(disponibles) +
+      "\n\nEscribe la siguiente factura de tu talonario físico:",
+      sesion.facturaActual || String(disponibles[0])
+    );
+
+    if (!nuevo || !nuevo.trim()) return;
+
+    const numero = Number(nuevo.trim());
+
+    if (
+      !Number.isSafeInteger(numero) ||
+      !disponibles.includes(numero)
+    ) {
+      alert(
+        "Esa factura no está disponible o ya está registrada localmente."
+      );
+      return;
+    }
+
+    sesion.facturaActual = String(numero);
+
+    localStorage.setItem(
+      "sesionApp",
+      JSON.stringify(sesion)
+    );
+
+    actualizarTextoFactura();
+  } catch (error) {
+    alert(
+      "No se pudo seleccionar la factura: " +
+      (error.message || "Error desconocido.")
+    );
+  } finally {
+    actualizandoFactura = false;
+  }
+}
+
 
 function incrementarFactura(numeroStr) {
   const coincidencia = String(numeroStr).match(/^(.*?)(\d+)$/);
@@ -3064,10 +3276,18 @@ async function sincronizarPendientesOffline() {
     );
   } finally {
     sincronizacionEnCurso = false;
-    if (boton) boton.disabled = false;
+if (boton) boton.disabled = false;
 
-    await actualizarContadorPendientesOffline();
+try {
+  await asegurarFacturaActual();
+} catch (errorFactura) {
+  console.error(
+    "No se pudo actualizar la factura después de sincronizar:",
+    errorFactura
+  );
+}
 
+await actualizarContadorPendientesOffline();
     const pantalla = document.getElementById("pantallaPendientesOffline");
 
     if (pantalla && !pantalla.classList.contains("oculto")) {
@@ -3265,10 +3485,11 @@ datos.fechaGpsCaptura = ubicacion.fechaGpsCaptura;
 );
 
 
-    // La factura queda reservada en la copia local.
-    if (usaFactura) {
-      sesion.facturaActual = null;
-    }
+    // Guarda el punto desde el que continuará el talonario.
+if (usaFactura) {
+  sesion.ultimaFacturaLocal = String(pendiente.numeroFactura);
+  sesion.facturaActual = null;
+}
 
     localStorage.setItem("sesionApp", JSON.stringify(sesion));
 
@@ -3288,7 +3509,21 @@ datos.fechaGpsCaptura = ubicacion.fechaGpsCaptura;
     guardandoCobroLocal = false;
 
     cerrarDetalle();
-    programarSincronizacionOffline();
+
+try {
+  await asegurarFacturaActual();
+} catch (errorFactura) {
+  console.error("Error al preparar la próxima factura:", errorFactura);
+
+  alert(
+    "El cobro ya quedó guardado." +
+    "\nNo se pudo preparar la siguiente factura: " +
+    (errorFactura.message || "Error desconocido.") +
+    "\nUsa Cambiar factura antes del próximo cobro."
+  );
+}
+
+programarSincronizacionOffline();
 
   } catch (error) {
    console.error("Error al guardar cobro:", error);
