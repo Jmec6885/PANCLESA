@@ -1015,8 +1015,13 @@ async function intentarLogin() {
       return;
     }
 
-    errorDiv.textContent =
-      "El rol del usuario no está configurado correctamente.";
+   errorDiv.textContent =
+  "Diagnóstico coord-01 | Usuario: " +
+  JSON.stringify(sesion.usuario) +
+  " | Rol recibido: " +
+  JSON.stringify(sesion.rol) +
+  " | Ruta admitida: " +
+  rolesSinInspectorNiFactura.includes(sesion.rol);
 
     boton.disabled = false;
     boton.textContent = "Entrar";
