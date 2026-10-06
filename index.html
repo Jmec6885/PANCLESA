@@ -991,7 +991,7 @@ async function intentarLogin() {
     sesion.inspector2 = null;
     sesion.facturaActual = null;
 
-    const rolesSinInspectorNiFactura = [
+        const rolesSinInspectorNiFactura = [
       "Supervisor",
       "Contador",
       "Administrador",
@@ -1006,12 +1006,18 @@ async function intentarLogin() {
     if (sesion.rol === "Cobrador") {
       await cargarInspectores(sesion.zona);
 
-      document.getElementById("pasoUsuario").classList.add("oculto");
-      document.getElementById("pasoInspector").classList.remove("oculto");
+      document.getElementById("pasoUsuario")
+        .classList.add("oculto");
+
+      document.getElementById("pasoInspector")
+        .classList.remove("oculto");
+
       return;
     }
 
-    errorDiv.textContent = "El rol del usuario no está configurado correctamente.";
+    errorDiv.textContent =
+      "El rol del usuario no está configurado correctamente.";
+
     boton.disabled = false;
     boton.textContent = "Entrar";
 
