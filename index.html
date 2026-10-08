@@ -2757,42 +2757,51 @@ async function cargarClientesParaCobro() {
         "Sonsonate"
       ];
 
-      for (const z of zonas) {
-        const resultado = await llamarBackend(
-          "clientesParaCobro",
-          { zona: z }
-        );
+     for (const z of zonas) {
+  console.log("CLIENTES ADMIN: solicitando zona", z);
 
-        if (!Array.isArray(resultado)) {
-          throw new Error(
-            resultado?.mensaje ||
-            "El servidor no devolvió una lista válida de clientes para " + z + "."
-          );
-        }
+  const resultado = await llamarBackend(
+    "clientesParaCobro",
+    { zona: z }
+  );
 
-        clientes = clientes.concat(resultado);
-      }
+  console.log("CLIENTES ADMIN: respuesta", {
+    zona: z,
+    esLista: Array.isArray(resultado),
+    cantidad: Array.isArray(resultado) ? resultado.length : null,
+    mensaje: resultado?.mensaje
+  });
 
-    } else {
-      const resultado = await llamarBackend(
-        "clientesParaCobro",
-        { zona: sesion.zona }
-      );
-
-      if (!Array.isArray(resultado)) {
-        throw new Error(
-          resultado?.mensaje ||
-          "El servidor no devolvió una lista válida de clientes."
-        );
-      }
-
-      clientes = resultado;
-    }
-
-    localStorage.setItem(
-      "clientesParaCobro",
-      JSON.stringify(clientes)
+  if (!Array.isArray(resultado)) {
+    throw new Error(
+      resultado?.mensaje ||
+      "El servidor no devolvió una lista válida de clientes para " + z + "."
     );
+  }
+
+  clientes = clientes.concat(resultado);
+}
+
+} else {
+  const resultado = await llamarBackend(
+    "clientesParaCobro",
+    { zona: sesion.zona }
+  );
+
+  if (!Array.isArray(resultado)) {
+    throw new Error(
+      resultado?.mensaje ||
+      "El servidor no devolvió una lista válida de clientes."
+    );
+  }
+
+  clientes = resultado;
+}
+
+localStorage.setItem(
+  "clientesParaCobro",
+  JSON.stringify(clientes)
+);
 
     pintarListaClientes(clientes);
 
