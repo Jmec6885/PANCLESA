@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>App de Cobros</title>
-<!-- VERSION_APP: v15 -->
+<!-- v17 integrada: instalar Codigo.gs y SesionesPermisos.gs y ejecutar configurarSistemaCambios() antes de publicar.
+     Respaldar/sincronizar pendientes. No borrar almacenamiento local. Camara/galeria: probar en telefonos reales. -->
+<!-- VERSION_APP: v17-integrada -->
 <style>
   body {
     font-family: Arial, sans-serif;
@@ -415,7 +417,7 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     <span id="textoSesion"></span>
     <button onclick="cerrarSesion()" class="botonCerrarSesion">Cerrar sesión</button>
   </div>
-  <div style="text-align:right; font-size:10px; color:#aaa;">v15</div>
+  <div style="text-align:right; font-size:10px; color:#aaa;">v17-integrada</div>
   <div class="barraAcciones" id="barraAcciones">
 
   <button
@@ -690,11 +692,17 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     <input type="text" id="nuevoClasificacion" list="opcionesClasificacion" placeholder="Ej: Sonsonate Norte">
     <datalist id="opcionesClasificacion"></datalist>
 
-    <label class="etiquetaCampo">Número de medidor (déjalo vacío si es cuota fija)</label>
-    <input type="text" id="nuevoMedidor">
-
-    <label class="etiquetaCampo">Lectura inicial (solo si tiene medidor)</label>
-    <input type="number" id="nuevoLecturaInicial" value="0">
+    <label class="etiquetaCampo" for="nuevoTipoMedidor">Tipo de cliente</label>
+    <select id="nuevoTipoMedidor" onchange="actualizarTipoMedidorNuevo()">
+      <option value="Sin medidor">Sin medidor</option>
+      <option value="Con medidor">Con medidor</option>
+    </select>
+    <div id="bloqueNuevoMedidor" class="oculto">
+      <label class="etiquetaCampo" for="nuevoMedidor">Número de medidor (obligatorio)</label>
+      <input type="text" id="nuevoMedidor" maxlength="100">
+      <label class="etiquetaCampo" for="nuevoLecturaInicial">Lectura inicial del medidor</label>
+      <input type="number" id="nuevoLecturaInicial" min="0" step="any" value="0">
+    </div>
 
     <div class="error" id="errorAgregar"></div>
     <button onclick="guardarClienteNuevo()" id="botonGuardarCliente">Guardar cliente</button>
@@ -743,6 +751,7 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     <div class="nombre" id="detNombre"></div>
     <div class="fila" id="detDireccion"></div>
     <div class="fila"><span class="etiqueta">Medidor:</span> <span id="detMedidor"></span></div>
+    <button type="button" onclick="abrirEditorMedidor(clienteActual)">Reemplazar medidor</button>
   </div>
 
   <div class="tarjetaCliente">
@@ -866,24 +875,24 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     <label class="etiquetaCampo" for="detFotoFactura">
       Foto de factura (obligatoria)
     </label>
-    <input
-      type="file"
-      id="detFotoFactura"
-      accept="image/*"
-      capture="environment"
-    >
+    <div style="display:flex;gap:8px;">
+      <button type="button" onclick="seleccionarFotoCobro('detFotoFactura', 'camara')">Tomar foto</button>
+      <button type="button" onclick="seleccionarFotoCobro('detFotoFactura', 'galeria')">Elegir de galería</button>
+    </div>
+    <input type="file" id="detFotoFactura" accept="image/*" hidden onchange="mostrarFotoElegida('detFotoFactura')">
+    <div class="fila" id="detFotoFacturaNombre" role="status">Sin imagen seleccionada</div>
   </div>
 
   <div id="bloqueFotoNotificacion" class="oculto">
     <label class="etiquetaCampo" for="detFotoNotificacion">
       Foto de notificación (obligatoria)
     </label>
-    <input
-      type="file"
-      id="detFotoNotificacion"
-      accept="image/*"
-      capture="environment"
-    >
+    <div style="display:flex;gap:8px;">
+      <button type="button" onclick="seleccionarFotoCobro('detFotoNotificacion', 'camara')">Tomar foto</button>
+      <button type="button" onclick="seleccionarFotoCobro('detFotoNotificacion', 'galeria')">Elegir de galería</button>
+    </div>
+    <input type="file" id="detFotoNotificacion" accept="image/*" hidden onchange="mostrarFotoElegida('detFotoNotificacion')">
+    <div class="fila" id="detFotoNotificacionNombre" role="status">Sin imagen seleccionada</div>
   </div>
 
   <div class="error" id="errorDetalle"></div>
@@ -899,6 +908,24 @@ button:disabled{background:#94a3b8!important;cursor:default;}
 </div>
 </div>
 
+
+<div id="pantallaEdicionMedidor" class="oculto" style="max-width:600px;margin:0 auto;padding:12px;">
+  <button type="button" class="botonVolver" onclick="cerrarEditorMedidor()">← Volver</button>
+  <div class="tarjetaCliente">
+    <h2 id="tituloEditorMedidor">Editar medidor y lectura anterior</h2>
+    <div id="clienteEditorMedidor" class="fila"></div>
+    <div id="valoresActualesMedidor" class="fila"></div>
+    <p id="avisoEditorMedidor" class="fila"></p>
+    <label class="etiquetaCampo" for="editarNumeroMedidor">Número de medidor</label>
+    <input type="text" id="editarNumeroMedidor" maxlength="100">
+    <label class="etiquetaCampo" for="editarLecturaAnterior" id="etiquetaLecturaEditor">Lectura anterior</label>
+    <input type="number" id="editarLecturaAnterior" min="0" step="any">
+    <label class="etiquetaCampo" for="motivoEdicionMedidor">Motivo (obligatorio)</label>
+    <textarea id="motivoEdicionMedidor" rows="3" maxlength="500"></textarea>
+    <div class="error" id="errorEdicionMedidor" role="status"></div>
+    <button type="button" id="botonGuardarMedidor" onclick="guardarEdicionMedidor()">Guardar cambio</button>
+  </div>
+</div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
         crossorigin=""></script>
@@ -1416,7 +1443,7 @@ async function asegurarFacturaActual() {
     const ultima = Number(sesion.ultimaFacturaLocal || 0);
 
     const siguiente = ultima > 0
-      ? disponibles.find(n => n > ultima)
+      ? (disponibles.find(n => n > ultima) ?? disponibles[0])
       : disponibles[0];
 
     sesion.facturaActual = siguiente
@@ -1780,6 +1807,7 @@ async function crearPendienteDesdeFormulario(
 
     codigo: datos.codigo,
     nombreCliente: datos.nombreCliente || "",
+    baseMedidor: datos.baseMedidor,
     numeroFactura: String(datos.numeroFactura || ""),
     estadoCobro: datos.estado,
     observaciones: datos.observaciones,
@@ -2295,6 +2323,7 @@ $${Number(item.monto).toFixed(2)}
 }
 
 async function cerrarSesion() {
+  if (gestionMedidorEnCurso || gestionFacturasEnCurso) { alert("Espera a que termine el cambio actual."); return; }
   if (guardandoCobroLocal || sincronizacionEnCurso) {
     alert(
       "Espera a que termine el guardado o la sincronización " +
@@ -2420,6 +2449,8 @@ async function abrirPantallaAgregar() {
     document.getElementById(id).value = "";
   }
   document.getElementById("nuevoLecturaInicial").value = "0";
+  document.getElementById("nuevoTipoMedidor").value = "Sin medidor";
+  actualizarTipoMedidorNuevo();
   document.getElementById("errorAgregar").textContent = "";
   document.getElementById("bloqueZonaAgregar").classList.toggle("oculto", sesion.rol !== "Administrador");
   document.getElementById("zonaAgregar").value = "";
@@ -2438,8 +2469,9 @@ async function guardarClienteNuevo() {
   const nombre = document.getElementById("nuevoNombre").value.trim();
   const direccion = document.getElementById("nuevoDireccion").value.trim();
   const clasificacion = document.getElementById("nuevoClasificacion").value;
-  const medidor = document.getElementById("nuevoMedidor").value.trim();
-  const lecturaInicial = document.getElementById("nuevoLecturaInicial").value;
+  const tipoMedidor = document.getElementById("nuevoTipoMedidor").value;
+  const medidor = tipoMedidor === "Con medidor" ? document.getElementById("nuevoMedidor").value.trim() : "";
+  const lecturaInicial = tipoMedidor === "Con medidor" ? document.getElementById("nuevoLecturaInicial").value : "0";
   const zonaCliente = sesion.rol === "Administrador"
     ? document.getElementById("zonaAgregar").value
     : sesion.zona;
@@ -2450,6 +2482,11 @@ async function guardarClienteNuevo() {
   if (!direccion) { errorDiv.textContent = "Falta la dirección"; return; }
   if (!clasificacion) { errorDiv.textContent = "Falta la clasificación"; return; }
 
+  if (tipoMedidor === "Con medidor" && (!medidor || !lecturaInicial.trim() ||
+      !Number.isFinite(Number(lecturaInicial)) || Number(lecturaInicial) < 0)) {
+    errorDiv.textContent = "Indica el número del medidor y su lectura inicial (0 u otra lectura no negativa).";
+    return;
+  }
   const boton = document.getElementById("botonGuardarCliente");
   boton.disabled = true;
   boton.textContent = "Guardando...";
@@ -2460,6 +2497,7 @@ async function guardarClienteNuevo() {
       direccion: direccion,
       zona: zonaCliente,
       clasificacion: clasificacion,
+      tipoMedidor: tipoMedidor,
       medidor: medidor,
       lecturaInicial: lecturaInicial,
       usuario: sesion.usuario
@@ -3077,6 +3115,10 @@ enlaceFoto(
       });
       tarjeta.appendChild(boton);
     }
+    if (["Supervisor","Contador","Administrador"].includes(sesion.rol)) {
+      const editar=document.createElement("button"); editar.type="button";editar.textContent="Editar medidor / lectura";
+      editar.addEventListener("click",e=>{e.stopPropagation();abrirEditorMedidor(cliente);});tarjeta.appendChild(editar);
+    }
     tarjeta.addEventListener("click", () => abrirDetalleCliente(cliente));
     contenedor.appendChild(tarjeta);
   });
@@ -3103,18 +3145,29 @@ function buscarMontoPorConsumo(consumoTotal) {
   return fila ? Number(fila.Monto) : null;
 }
 
-async function abrirDetalleCliente(cliente) {
+async function abrirDetalleCliente(cliente, verificado = false) {
 if (sesion.rol !== "Cobrador") {
-  alert("Este rol es de consulta y administración. Los cobros solo los registra el Cobrador.");
+  await abrirEditorMedidor(cliente);
   return;
 }
 
 if (guardandoCobroLocal || sincronizacionEnCurso) {
   return;
 }
+  if (gestionMedidorEnCurso) return;
+  if (navigator.onLine && !verificado) {
+    try {
+      const actualizado = await llamarBackend("consultarClienteMedidor", {codigo:cliente["CODIGO"],zona:cliente["Zona"]||sesion.zona});
+      if (!actualizado?.exito || !actualizado.cliente) throw new Error(actualizado?.mensaje || "No se pudo verificar la lectura del cliente.");
+      cliente = Object.assign({},cliente,actualizado.cliente);
+      aplicarClienteActualizadoLocal(cliente);
+    } catch(e) { alert(e.message || "No se pudo consultar el cliente."); return; }
+  }
   clienteActual = cliente;
 document.getElementById("detFotoFactura").value = "";
 document.getElementById("detFotoNotificacion").value = "";
+mostrarFotoElegida("detFotoFactura");
+mostrarFotoElegida("detFotoNotificacion");
   await obtenerListaPrecios();
 
   document.getElementById("pantallaPrincipal").classList.add("oculto");
@@ -3384,6 +3437,7 @@ function datosDesdePendiente(p) {
   return {
     idCobro: p.idCobro,
     codigo: p.codigo,
+    baseMedidor: p.baseMedidor,
     estado: p.estadoCobro,
     observaciones: p.observaciones,
 
@@ -3569,6 +3623,7 @@ async function ejecutarColaOffline(identidad) {
 
 async function sincronizarPendientesOffline() {
   if (sesionBloqueada) return;
+  if (gestionMedidorEnCurso || !document.getElementById("pantallaEdicionMedidor").classList.contains("oculto")) return;
   if (
     sincronizacionEnCurso ||
     guardandoCobroLocal ||
@@ -3737,6 +3792,10 @@ const fechaCaptura = new Date().toISOString();
 
     const pendientes = await obtenerPendientesOffline();
     const numeroFactura = usaFactura ? String(sesion.facturaActual) : "";
+    if (usaFactura) {
+      const disponibles = await obtenerFacturasDisponiblesSeguras();
+      if (!disponibles.includes(Number(numeroFactura))) throw new Error("La factura ya no está disponible para tu usuario. Puede haber sido retirada, usada o estar en conflicto. Selecciona otra.");
+    }
 
     if (pendientes.some(p => String(p.codigo) === String(cliente["CODIGO"]))) {
       throw new Error(
@@ -3760,6 +3819,7 @@ const fechaCaptura = new Date().toISOString();
 fechaCaptura,
 zonaCaptura: zona,
 nombreCliente: cliente["Nombre Cliente"] || "",
+baseMedidor: baseMedidorLocal(cliente),
 inspector1,
 inspector2,
       observaciones,
@@ -4051,74 +4111,37 @@ function cerrarPantallaFacturas() {
 }
 
 async function cargarRangosFacturas() {
-  if (!["Contador", "Administrador"].includes(sesion.rol)) return;
-
-  const zona = zonaDeFacturas();
-  const estado = document.getElementById("estadoRangosFacturas");
-  const lista = document.getElementById("listaRangosFacturas");
-
-  lista.replaceChildren();
-  document.getElementById("errorRangoFacturas").textContent = "";
-
-  if (!zona) {
-    estado.textContent = "Selecciona una zona para consultar rangos.";
-    return;
-  }
-
-  estado.textContent = "Cargando rangos...";
-
+  if(!["Contador","Administrador"].includes(sesion.rol))return;
+  const consulta=++solicitudListaRangos,zona=zonaDeFacturas(),token=sesion.token;
+  const estado=document.getElementById("estadoRangosFacturas"),lista=document.getElementById("listaRangosFacturas");
+  lista.replaceChildren();document.getElementById("errorRangoFacturas").textContent="";
+  if(!zona){estado.textContent="Selecciona una zona.";return;}estado.textContent="Consultando asignaciones...";
   try {
-    const r = await llamarBackend("facturasDisponibles", { zona });
-
-    if (!r || !r.exito) {
-      throw new Error(r?.mensaje || "No se pudieron cargar los rangos.");
-    }
-
-    if (zona !== zonaDeFacturas()) return;
-
-    if (!Array.isArray(r.rangos) || !Array.isArray(r.disponibles)) {
-      throw new Error("La respuesta de facturas no tiene el formato esperado.");
-    }
-
-    estado.textContent = r.rangos.length
-      ? "Facturas disponibles en esta zona: " + r.disponibles.length
-      : "Aún no hay rangos asignados en esta zona.";
-
-    r.rangos.forEach(item => {
-      const tarjeta = document.createElement("div");
-      tarjeta.className = "tarjetaCliente";
-
-      const nombre = document.createElement("div");
-      nombre.className = "nombre";
-      nombre.textContent = "Rango " + item.inicio + " a " + item.fin;
-
-      const detalle = document.createElement("div");
-      detalle.className = "fila";
-      detalle.textContent =
-        "Total: " + item.total +
-        " · Usadas: " + item.usadas +
-        " · Disponibles: " + item.disponibles;
-
- const cobrador = document.createElement("div");
-cobrador.className = "fila";
-cobrador.textContent = "Usuario Cobrador: " +
-  (item.usuarioCobrador || "Sin asignar");
-
-tarjeta.append(nombre, detalle, cobrador);
-
-     
+    const r=await llamarBackend("facturasDisponibles",{zona});
+    if(consulta!==solicitudListaRangos||zona!==zonaDeFacturas()||token!==sesion.token)return;
+    if(!r?.exito||!Array.isArray(r.rangos)||!Array.isArray(r.disponibles))throw new Error(r?.mensaje||"Respuesta inválida.");
+    estado.textContent="Facturas disponibles sin conflictos: "+r.disponibles.length;
+    r.rangos.forEach(item=>{
+      const tarjeta=document.createElement("div");tarjeta.className="tarjetaCliente";
+      const linea=(texto,clase="fila")=>{const div=document.createElement("div");div.className=clase;div.textContent=texto;tarjeta.appendChild(div);};
+      linea("Asignación activa: "+item.inicio+"–"+item.fin,"nombre");linea("Usuario: "+item.usuarioCobrador);
+      linea("Total: "+item.total+" · Usadas: "+item.usadas+" · Disponibles: "+item.disponibles);
+      linea("Tramos disponibles: "+textoTramosFacturas(item.tramosDisponibles));
+      if(item.conflictos)linea(item.conflictos+" números con asignaciones cruzadas. No se habilitan para cobrar.","error");
+      if(item.idRango&&item.total>item.usadas){const b=document.createElement("button");b.type="button";b.textContent="Retirar facturas sobrantes";
+        b.style.background="#b42332";b.addEventListener("click",()=>retirarFacturasSobrantes(item,zona));tarjeta.appendChild(b);}
       lista.appendChild(tarjeta);
     });
-
-  } catch (err) {
-    console.error("Error al consultar rangos:", err);
-    if (zona === zonaDeFacturas()) {
-      estado.textContent = err.message || "No se pudieron consultar los rangos.";
+    if(r.historicos?.length){
+      const titulo=document.createElement("h3");titulo.textContent="Asignaciones inactivas — historial";lista.appendChild(titulo);
+      r.historicos.forEach(item=>{const t=document.createElement("div");t.className="tarjetaCliente";t.textContent=
+        "Inactiva: "+item.inicio+"–"+item.fin+" · Usuario anterior: "+item.usuarioCobrador+" · "+item.fecha;lista.appendChild(t);});
     }
-  }
+  }catch(e){console.error("Consulta rangos",e);if(consulta===solicitudListaRangos&&zona===zonaDeFacturas())estado.textContent=e.message||"No se pudo consultar.";}
 }
 
 async function guardarRangoFacturas() {
+  if (gestionFacturasEnCurso || gestionMedidorEnCurso) return;
   if (!["Contador", "Administrador"].includes(sesion.rol)) return;
 
   const zona = zonaDeFacturas();
@@ -4172,6 +4195,8 @@ async function guardarRangoFacturas() {
     " el rango " + inicio + "–" + fin + "?"
   )) return;
 
+  gestionFacturasEnCurso = true;
+  document.getElementById("pantallaFacturas").inert = true;
   boton.disabled = true;
   boton.textContent = "Guardando...";
 
@@ -4199,6 +4224,8 @@ async function guardarRangoFacturas() {
       "No se pudo confirmar el guardado. " +
       "Consulta la lista antes de intentar otra vez.";
   } finally {
+    gestionFacturasEnCurso = false;
+    document.getElementById("pantallaFacturas").inert = false;
     boton.disabled = false;
     boton.textContent = "Guardar rango";
   }
@@ -4795,6 +4822,154 @@ function pintarResumenCoordinador() {
     fila("Total de ambos grupos",cantidad(n(r.masDe40Dias)+n(r.sinPagosRegistrados)))
   )).join("");
 }
+
+
+
+let gestionMedidorEnCurso = false;
+let gestionFacturasEnCurso = false;
+let contextoEditorMedidor = null;
+let solicitudListaRangos = 0;
+
+function actualizarTipoMedidorNuevo() {
+  const con=document.getElementById("nuevoTipoMedidor").value==="Con medidor";
+  document.getElementById("bloqueNuevoMedidor").classList.toggle("oculto",!con);
+  document.getElementById("nuevoMedidor").required=con;
+  document.getElementById("nuevoLecturaInicial").required=con;
+  if(!con){document.getElementById("nuevoMedidor").value="";document.getElementById("nuevoLecturaInicial").value="0";}
+}
+function seleccionarFotoCobro(id,origen) {
+  if(guardandoCobroLocal||sincronizacionEnCurso||gestionMedidorEnCurso)return;
+  if(!["detFotoFactura","detFotoNotificacion"].includes(id))return;
+  const input=document.getElementById(id);
+  if(origen==="camara")input.setAttribute("capture","environment");else input.removeAttribute("capture");
+  input.click();
+}
+function mostrarFotoElegida(id) {
+  const input=document.getElementById(id),nombre=document.getElementById(id+"Nombre");
+  const foto=input?.files?.[0];
+  if(foto&&foto.type&&!foto.type.startsWith("image/")){input.value="";nombre.textContent="Selecciona una imagen válida.";return;}
+  if(nombre)nombre.textContent=foto?"Imagen seleccionada: "+foto.name:"Sin imagen seleccionada";
+}
+function baseMedidorLocal(cliente) {
+  return {medidor:String(cliente["Medidor"]??"").trim(),lecturaAnterior:Number(cliente["Lectura Anterior"]||0),
+    pteAnterior:Number(cliente["Pte/KWH Meses Anteri."]||0),kwPendiente:Number(cliente["KW Pendiente"]||0)};
+}
+function aplicarClienteActualizadoLocal(cliente) {
+  const mismo=c=>String(c["CODIGO"])===String(cliente["CODIGO"])&&String(c["Zona"]||"").trim()===String(cliente["Zona"]||"").trim();
+  clientesCargados=clientesCargados.map(c=>mismo(c)?Object.assign({},c,cliente):c);
+  if(clienteActual&&mismo(clienteActual))clienteActual=Object.assign({},clienteActual,cliente);
+  try {
+    const lista=JSON.parse(localStorage.getItem("clientesParaCobro")||"[]");
+    if(Array.isArray(lista))localStorage.setItem("clientesParaCobro",JSON.stringify(lista.map(c=>mismo(c)?Object.assign({},c,cliente):c)));
+    const paquete=obtenerPaqueteOffline();
+    if(paquete&&paquete.usuario===sesion.usuario&&paquete.zona===sesion.zona){
+      paquete.clientes=paquete.clientes.map(c=>mismo(c)?Object.assign({},c,cliente):c);
+      localStorage.setItem(CLAVE_PAQUETE_OFFLINE,JSON.stringify(paquete));
+    }
+  }catch(e){console.error("Cambio confirmado; falló actualizar la copia local",e);}
+  filtrarClientes();atrasadosCargados=false;
+}
+async function abrirEditorMedidor(cliente) {
+  if(!cliente||sesionBloqueada||gestionMedidorEnCurso||gestionFacturasEnCurso||guardandoCobroLocal||sincronizacionEnCurso)return;
+  if(!["Cobrador","Supervisor","Contador","Administrador"].includes(sesion.rol))return;
+  if(!navigator.onLine){alert("Editar o reemplazar el medidor requiere conexión.");return;}
+  const detalle=!document.getElementById("pantallaDetalle").classList.contains("oculto");
+  if(detalle&&!confirm("Al confirmar el cambio se reiniciará el formulario de cobro abierto. Los datos sin guardar se perderán. ¿Continuar?"))return;
+  gestionMedidorEnCurso=true;
+  const identidad={usuario:sesion.usuario,token:sesion.token};
+  try {
+    if(sesion.rol==="Cobrador") {
+      const pendientes=await obtenerPendientesOffline();
+      if(pendientes.some(p=>String(p.codigo)===String(cliente["CODIGO"])))throw new Error("Este cliente tiene un cobro pendiente en este teléfono. Sincronízalo o resuelve su revisión antes de reemplazar el medidor.");
+    }
+    const r=await llamarBackend("consultarClienteMedidor",{codigo:cliente["CODIGO"],zona:cliente["Zona"]||sesion.zona});
+    if(!r?.exito||!r.cliente)throw new Error(r?.mensaje||"No se pudo consultar el cliente.");
+    if(sesion.usuario!==identidad.usuario||sesion.token!==identidad.token)throw new Error("La sesión cambió.");
+    const cobrador=sesion.rol==="Cobrador";
+    if(cobrador&&!r.baseMedidor.medidor)throw new Error("El Cobrador solo reemplaza medidores existentes. La instalación inicial la registra un rol administrativo.");
+    contextoEditorMedidor={cliente:r.cliente,revision:r.revision,identidad,regresarA:detalle?"pantallaDetalle":"pantallaPrincipal"};
+    document.getElementById("tituloEditorMedidor").textContent=cobrador?"Reemplazar medidor":"Editar medidor y lectura anterior";
+    document.getElementById("clienteEditorMedidor").textContent=r.cliente["CODIGO"]+" · "+r.cliente["Nombre Cliente"]+" · "+r.cliente["Zona"];
+    document.getElementById("valoresActualesMedidor").textContent="Medidor actual: "+(r.baseMedidor.medidor||"Sin medidor")+" · Lectura anterior: "+r.baseMedidor.lecturaAnterior;
+    document.getElementById("avisoEditorMedidor").textContent=(cobrador?
+      "Indica un medidor distinto y su lectura inicial (0 u otra lectura real). No puedes corregir solo la lectura del medidor actual. ":
+      "Puedes corregir el número y/o la lectura anterior. ")+"Los pendientes se conservan. No se calcula automáticamente el consumo no registrado del medidor retirado; revísalo antes de confirmar.";
+    document.getElementById("editarNumeroMedidor").value=cobrador?"":r.baseMedidor.medidor;
+    document.getElementById("editarLecturaAnterior").value=cobrador?"0":String(r.baseMedidor.lecturaAnterior);
+    document.getElementById("etiquetaLecturaEditor").textContent=cobrador?"Lectura inicial del nuevo medidor":"Lectura anterior";
+    document.getElementById("motivoEdicionMedidor").value="";document.getElementById("errorEdicionMedidor").textContent="";
+    document.getElementById(contextoEditorMedidor.regresarA).classList.add("oculto");
+    document.getElementById("pantallaEdicionMedidor").classList.remove("oculto");
+  }catch(e){alert(e.message||"No se pudo abrir el editor.");}finally{gestionMedidorEnCurso=false;}
+}
+function cerrarEditorMedidor() {
+  if(gestionMedidorEnCurso)return;
+  document.getElementById("pantallaEdicionMedidor").classList.add("oculto");
+  document.getElementById(contextoEditorMedidor?.regresarA||"pantallaPrincipal").classList.remove("oculto");
+  contextoEditorMedidor=null;programarSincronizacionOffline();
+}
+async function guardarEdicionMedidor() {
+  if(!contextoEditorMedidor||gestionMedidorEnCurso||sesionBloqueada)return;
+  const contexto=contextoEditorMedidor,error=document.getElementById("errorEdicionMedidor");error.textContent="";
+  if(!navigator.onLine){error.textContent="Necesitas conexión.";return;}
+  if(sesion.token!==contexto.identidad.token||sesion.usuario!==contexto.identidad.usuario){error.textContent="La sesión cambió. Consulta nuevamente.";return;}
+  const medidor=document.getElementById("editarNumeroMedidor").value.trim(),texto=document.getElementById("editarLecturaAnterior").value.trim();
+  const lecturaAnterior=Number(texto),motivo=document.getElementById("motivoEdicionMedidor").value.trim(),cobrador=sesion.rol==="Cobrador";
+  if(!medidor||!texto||!Number.isFinite(lecturaAnterior)||lecturaAnterior<0||!motivo){error.textContent="Completa medidor, lectura no negativa y motivo.";return;}
+  if(cobrador&&medidor===String(contexto.cliente["Medidor"]||"").trim()){error.textContent="Ingresa un medidor distinto.";return;}
+  if(!confirm("¿Guardar el cambio de "+contexto.cliente["CODIGO"]+"?\nMedidor: "+medidor+"\nLectura anterior nueva: "+lecturaAnterior+
+    "\n\n"+(cobrador?"Confirmas el reemplazo físico.\n":"")+"Los pendientes se conservan. No se liquidará automáticamente consumo del medidor retirado."))return;
+  const idCambio=generarIdCobroOffline(),pantalla=document.getElementById("pantallaEdicionMedidor"),boton=document.getElementById("botonGuardarMedidor");
+  gestionMedidorEnCurso=true;pantalla.inert=true;boton.textContent="Guardando...";let confirmado=false;
+  try {
+    const r=await llamarBackend("actualizarMedidorCliente",{codigo:contexto.cliente["CODIGO"],zona:contexto.cliente["Zona"],
+      medidor,lecturaAnterior,motivo,revision:contexto.revision,confirmarReemplazo:cobrador,idCambio});
+    if(!r?.exito||!r.cliente)throw new Error(r?.mensaje||"No se confirmó el cambio.");
+    confirmado=true;aplicarClienteActualizadoLocal(r.cliente);alert("Cambio confirmado. Medidor: "+medidor+" · Lectura anterior: "+lecturaAnterior);
+    pantalla.classList.add("oculto");contextoEditorMedidor=null;
+    if(contexto.regresarA==="pantallaDetalle"){gestionMedidorEnCurso=false;await abrirDetalleCliente(r.cliente,true);}
+    else document.getElementById("pantallaPrincipal").classList.remove("oculto");
+  }catch(e){console.error("Cambio medidor",{idCambio,error:e});error.textContent=confirmado?"Cambio confirmado; vuelve a consultar el cliente, no lo repitas.":
+      "No se pudo confirmar: "+(e.message||"Error de conexión.")+" Consulta cliente y CambiosMedidor antes de repetir. ID: "+idCambio;alert(error.textContent);}
+  finally{gestionMedidorEnCurso=false;pantalla.inert=false;boton.textContent="Guardar cambio";programarSincronizacionOffline();}
+}
+function textoTramosFacturas(tramos) {
+  return (tramos||[]).map(t=>t.inicio===t.fin?String(t.inicio):t.inicio+"–"+t.fin).join(", ")||"Ninguno";
+}
+async function retirarFacturasSobrantes(item,zona) {
+  if(gestionFacturasEnCurso||gestionMedidorEnCurso||sesionBloqueada)return;
+  if(!navigator.onLine){alert("Necesitas conexión para registrar la devolución.");return;}
+  if(zona!==zonaDeFacturas()){alert("La zona cambió. Consulta nuevamente.");return;}
+  const primer=item.tramosDisponibles?.[0];
+  const ini=prompt("Usuario: "+item.usuarioCobrador+"\nAsignación: "+item.inicio+"–"+item.fin+
+    "\nDisponibles: "+textoTramosFacturas(item.tramosDisponibles)+"\n\nNúmero INICIAL de las facturas sin utilizar recibidas físicamente:",String(primer?.inicio||item.inicio));
+  if(ini===null)return;
+  const ultimo=prompt("Número FINAL del tramo devuelto. Registra tramos separados en operaciones distintas:",String(primer?.fin||item.fin));
+  if(ultimo===null)return;
+  const inicio=Number(ini.trim()),fin=Number(ultimo.trim());
+  if(!ini.trim()||!ultimo.trim()||!Number.isSafeInteger(inicio)||!Number.isSafeInteger(fin)||inicio<item.inicio||fin>item.fin||fin<inicio){alert("Tramo inválido.");return;}
+  const respuestaMotivo=prompt("Motivo del retiro:","Devolución física de facturas sobrantes sin utilizar");if(respuestaMotivo===null)return;
+  const motivo=respuestaMotivo.trim();if(!motivo||motivo.length>500){alert("Indica motivo de 1 a 500 caracteres.");return;}
+  if(!confirm("¿Recibiste FÍSICAMENTE, SIN UTILIZAR, las facturas "+inicio+"–"+fin+" del usuario "+item.usuarioCobrador+"?\n\n"+
+    "No incluyas facturas de cobros pendientes en el teléfono. Se cerrará la asignación original y se conservarán los números no devueltos que aún estén pendientes para el mismo usuario."))return;
+  const idRetiro=generarIdCobroOffline(),pantalla=document.getElementById("pantallaFacturas"),error=document.getElementById("errorRangoFacturas");
+  gestionFacturasEnCurso=true;pantalla.inert=true;error.textContent="Registrando devolución...";
+  try {
+    const r=await llamarBackend("retirarRangoFacturas",{zona,idRango:item.idRango,inicio,fin,motivo,confirmacionFisica:true,idRetiro});
+    if(!r?.exito)throw new Error(r?.mensaje||"No se confirmó el retiro.");
+    alert(r.cantidad+" facturas retiradas. La asignación original quedó inactiva y su historial se conserva. Ya puedes asignar el tramo devuelto a otro usuario.");
+    await cargarRangosFacturas();
+  }catch(e){console.error("Retiro facturas",{idRetiro,error:e});error.textContent="No se pudo confirmar: "+(e.message||"Error de conexión.")+
+    " Consulta la lista y RetirosFacturas antes de repetir. ID: "+idRetiro;alert(error.textContent);}
+  finally{gestionFacturasEnCurso=false;pantalla.inert=false;}
+}
+async function actualizarTalonarioTrasConexion() {
+  if(sesion.rol!=="Cobrador"||sesionBloqueada||!navigator.onLine||sincronizacionEnCurso||guardandoCobroLocal||gestionMedidorEnCurso||actualizandoFactura)return;
+  try{await obtenerFacturasDisponiblesSeguras();await asegurarFacturaActual();}catch(e){console.error("No se actualizó el talonario",e);}
+}
+window.addEventListener("online",actualizarTalonarioTrasConexion);
+window.addEventListener("DOMContentLoaded",actualizarTalonarioTrasConexion);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")actualizarTalonarioTrasConexion();});
 
 </script>
 
