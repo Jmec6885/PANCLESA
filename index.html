@@ -2498,28 +2498,98 @@ async function liberarUnCliente(codigo, tarjeta) {
 }
 
 async function liberarTodos() {
-  if (!confirm("¿Liberar a TODOS los clientes no liberados de tu zona?")) return;
+  if (!confirm("¿Liberar a TODOS los clientes no liberados de tu zona?")) {
+    return;
+  }
 
   const zonas = sesion.rol === "Administrador"
     ? ["Santa Ana", "Ahuachapan", "Sonsonate"]
     : [sesion.zona];
 
   let total = 0;
+  let zonaEnProceso = "";
+  const zonasConfirmadas = [];
 
-  for (const z of zonas) {
-    const resultado = await llamarBackend("liberarBloque", {
-      zona: z,
-      clasificacion: null,
-      usuario: sesion.usuario
+  try {
+    for (const z of zonas) {
+      zonaEnProceso = z;
+
+      console.log("LIBERAR ADMIN: solicitando", {
+        accion: "liberarBloque",
+        zona: z,
+        clasificacion: null
+      });
+
+      const resultado = await llamarBackend("liberarBloque", {
+        zona: z,
+        clasificacion: null,
+        usuario: sesion.usuario
+      });
+
+      console.log("LIBERAR ADMIN: respuesta", {
+        zona: z,
+        resultado: resultado
+      });
+
+      if (!resultado || !resultado.exito) {
+        throw new Error(
+          resultado?.mensaje ||
+          "El servidor no confirmó la liberación de " + z + "."
+        );
+      }
+
+      const cantidad = Number(resultado.cantidad);
+
+      if (!Number.isFinite(cantidad) || cantidad < 0) {
+        throw new Error(
+          "El servidor confirmó la operación de " + z +
+          ", pero devolvió una cantidad inválida. Revisa los registros."
+        );
+      }
+
+      total += cantidad;
+      zonasConfirmadas.push(z);
+    }
+  } catch (error) {
+    console.error("Error al liberar clientes", {
+      accion: "liberarBloque",
+      zona: zonaEnProceso,
+      zonasConfirmadas: zonasConfirmadas,
+      totalConfirmado: total,
+      error: error
     });
 
-    if (resultado.exito) total += resultado.cantidad;
+    alert(
+      "No se pudo completar la liberación.\n\n" +
+      "Zona en proceso: " + zonaEnProceso + "\n" +
+      "Zonas confirmadas: " +
+      (zonasConfirmadas.join(", ") || "Ninguna") + "\n" +
+      "Clientes liberados confirmados: " + total + "\n\n" +
+      "Detalle: " + (error?.message || String(error)) + "\n\n" +
+      "La última operación podría haberse ejecutado aunque no se " +
+      "recibiera su respuesta. Revisa Apps Script y los registros " +
+      "antes de volver a pulsar Liberar todos."
+    );
+
+    return;
   }
 
   alert(total + " clientes liberados");
-  cargarClientesNoLiberados();
-}
 
+  try {
+    await cargarClientesNoLiberados();
+  } catch (error) {
+    console.error(
+      "La liberación fue confirmada, pero falló la actualización de la lista",
+      error
+    );
+
+    alert(
+      "La liberación fue confirmada, pero no se pudo actualizar la lista. " +
+      "No repitas la liberación; actualiza solamente la consulta."
+    );
+  }
+}
 async function liberarPorClasificacion() {
   const clasificacion = document.getElementById("selectClasificacionLiberar").value;
 
