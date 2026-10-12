@@ -1,12 +1,34 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<!-- VERSION v18 - ENTREGA HTML COMPLETO
+No publicar aislado. Requiere Codigo.gs v18 y el proximo SesionesPermisos.gs v18.
+Nuevas acciones del enrutador:
+resumenClasificaciones -> obtenerResumenClasificaciones(s.usuario,p.zona,p.fecha)
+clientesClasificacion -> obtenerClientesDeClasificacion(s.usuario,p.zona,p.clasificacion,p.tipo)
+resumenAtrasadosClasificacion -> obtenerResumenAtrasadosClasificacion(s.usuario,p.zona)
+cargarPreciosCSV -> cargarPreciosCSV(s.usuario,p.csv,p.idCarga)
+reservarInspectores -> reservarInspectoresSesion(p.token,p.inspector1,p.inspector2)
+avanceDelDia -> consultarAvancePorRol(s.usuario,p.zona,p.fecha,parejaConfirmadaDelServidor)
+Login al reemplazar sesion debe devolver idParejaSesion e inspectores cuando se conservaron.
+Preparacion: configurarVersion18() en GS; confirmar inspectores con la nueva interfaz;
+activarValidacionInspectoresV18() solo cuando todos los archivos esten publicados y sesiones listas.
+No borrar IndexedDB/localStorage. Pendientes antiguos sin version/pareja pueden requerir revision.
+La copia offline indica su corte; sus cantidades no son un avance actualizado en tiempo real.
+Dia 1: cierre previo; desde dia 2: mes actual, incluyendo pagos del dia 1.
+Al abrir detalle de una tarjeta de cierre se rotula LISTA ACTUAL, no detalle historico.
+CSV activado al confirmar guardado; pendientes nuevos conservan versionTarifa e idParejaSesion.
+Camara/galeria, retiros y medidores v17 conservados. Probar selector en telefonos reales.
+Verificacion local: 18 pruebas de logica/contratos aprobadas con DOM/backend simulados.
+No equivale a prueba en Vercel o Apps Script real.
+-->
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>App de Cobros</title>
 <!-- v17 integrada: instalar Codigo.gs y SesionesPermisos.gs y ejecutar configurarSistemaCambios() antes de publicar.
      Respaldar/sincronizar pendientes. No borrar almacenamiento local. Camara/galeria: probar en telefonos reales. -->
-<!-- VERSION_APP: v17-integrada -->
+<!-- VERSION_APP: v18-integrada -->
 <style>
   body {
     font-family: Arial, sans-serif;
@@ -417,7 +439,7 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     <span id="textoSesion"></span>
     <button onclick="cerrarSesion()" class="botonCerrarSesion">Cerrar sesión</button>
   </div>
-  <div style="text-align:right; font-size:10px; color:#aaa;">v17-integrada</div>
+  <div style="text-align:right; font-size:10px; color:#aaa;">v18-integrada</div>
   <div class="barraAcciones" id="barraAcciones">
 
   <button
@@ -478,6 +500,7 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     Usuarios
   </button>
 
+<button id="botonPreciosV18" type="button" class="accionPrincipal oculto" onclick="abrirPreciosV18()">Actualizar precios</button>
 <button id="botonFacturas" class="accionPrincipal oculto" onclick="abrirPantallaFacturas()">Facturas</button>
 <button
   id="botonReporteExcel"
@@ -507,6 +530,13 @@ button:disabled{background:#94a3b8!important;cursor:default;}
 
 
 
+<div id="bloqueZonaConsulta" class="tarjetaCliente oculto">
+  <label class="etiquetaCampo" for="zonaConsultaGeneral">Zona del resumen y clasificaciones</label>
+  <select id="zonaConsultaGeneral" onchange="cambiarZonaConsultaV18()">
+    <option value="">Todas las zonas</option><option value="Santa Ana">Santa Ana</option>
+    <option value="Ahuachapan">Ahuachapan</option><option value="Sonsonate">Sonsonate</option>
+  </select>
+</div>
 <div class="tarjetaCliente" id="barraAvance">
   <div class="fila">
     <span class="etiqueta">Resumen del día:</span>
@@ -544,14 +574,26 @@ button:disabled{background:#94a3b8!important;cursor:default;}
   
 
 <div id="tabCobros">
-    <input type="text" id="campoBuscar" placeholder="Buscar por código o nombre..." oninput="filtrarClientes()">
-    <div id="cargandoCobros" class="mensajeCentro">Cargando clientes...</div>
-    <div id="listaClientes"></div>
+    <div id="estadoClasificaciones" class="fila" role="status"></div>
+    <div id="listaClasificaciones"></div>
+    <div id="detalleClasificacion" class="oculto">
+      <button type="button" class="botonVolver" onclick="volverClasificaciones()">← Volver a clasificaciones</button>
+      <h3 id="tituloClasificacion"></h3>
+      <div class="fila" id="avisoDetalleClasificacion"></div>
+      <input type="text" id="campoBuscar" placeholder="Buscar por código o nombre..." oninput="filtrarClientes()">
+      <div id="cargandoCobros" class="mensajeCentro oculto">Cargando clientes...</div>
+      <div id="listaClientes"></div>
+    </div>
   </div>
-
   <div id="tabAtrasados" class="oculto">
-    <div id="cargandoAtrasados" class="mensajeCentro oculto">Cargando...</div>
-    <div id="listaAtrasados"></div>
+    <div id="estadoClasificacionesAtrasadas" class="fila" role="status"></div>
+    <div id="clasificacionesAtrasadas"></div>
+    <div id="detalleClasificacionAtrasada" class="oculto">
+      <button type="button" class="botonVolver" onclick="volverClasificacionesAtrasadas()">← Volver a clasificaciones</button>
+      <h3 id="tituloClasificacionAtrasada"></h3>
+      <div id="cargandoAtrasados" class="mensajeCentro oculto">Cargando...</div>
+      <div id="listaAtrasados"></div>
+    </div>
   </div>
 </div>
 
@@ -926,6 +968,19 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     <button type="button" id="botonGuardarMedidor" onclick="guardarEdicionMedidor()">Guardar cambio</button>
   </div>
 </div>
+
+<section id="pantallaPreciosV18" class="oculto" style="max-width:600px;margin:auto;padding:12px;">
+  <button type="button" class="botonVolver" onclick="cerrarPreciosV18()">← Volver</button>
+  <div class="tarjetaCliente">
+    <h2>Actualizar precios por CSV</h2>
+    <p class="fila">Dos columnas: Consumo y Monto. La nueva tarifa queda activa al confirmar el guardado. Se conserva el respaldo anterior.</p>
+    <label class="etiquetaCampo" for="archivoPreciosV18">Lista de precios CSV</label>
+    <input type="file" id="archivoPreciosV18" accept=".csv,text/csv" onchange="previsualizarPreciosV18()">
+    <div id="estadoPreciosV18" class="fila" role="status"></div>
+    <div id="vistaPreciosV18" style="overflow:auto;"></div>
+    <button type="button" id="botonCargarPreciosV18" disabled onclick="guardarPreciosV18()">Confirmar nueva tarifa</button>
+  </div>
+</section>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
         crossorigin=""></script>
@@ -934,6 +989,13 @@ button:disabled{background:#94a3b8!important;cursor:default;}
 // Reemplaza esto con la URL /exec de tu Apps Script
 const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyz97GBtEQNkvHxDJ58P63J00MM5HluTSv5xrcr-t0PdWL5tgT7HWQBu67QE9UxdZDn3A/exec";
 
+// Variables v18 (declaradas antes de los manejadores de arranque).
+
+// V18: requiere Codigo.gs y SesionesPermisos.gs v18. No instalar aislado.
+let clasificacionActualV18=null,atrasadaActualV18=null;
+let resumenMensualV18=null,resumenAtrasadosV18=null,preciosCSVV18=null;
+let operacionPreciosV18=false,reservandoInspectoresV18=false;
+let consultaClasV18=0,consultaAtrasV18=0,detalleClasV18=0,detalleAtrasV18=0;
 let sesion = {
   usuario: null,
   rol: null,
@@ -1118,6 +1180,10 @@ async function intentarLogin() {
     sesion.inspector1 = null;
     sesion.inspector2 = null;
     sesion.facturaActual = null;
+    sesion.idParejaSesion=null;sesion.seleccionFacturaPendienteV18=false;
+    if(resultado.idParejaSesion && Array.isArray(resultado.inspectores) && resultado.inspectores.length===2) {
+      sesion.idParejaSesion=resultado.idParejaSesion;sesion.inspector1=resultado.inspectores[0];sesion.inspector2=resultado.inspectores[1];
+    }
 
         const rolesSinInspectorNiFactura = [
       "Supervisor",
@@ -1132,6 +1198,12 @@ async function intentarLogin() {
     }
 
     if (sesion.rol === "Cobrador") {
+      if(sesion.idParejaSesion) {
+        sesion.seleccionFacturaPendienteV18=true;
+        localStorage.setItem("sesionApp",JSON.stringify(sesion));
+        document.getElementById("pasoUsuario").classList.add("oculto");document.getElementById("pasoFactura").classList.remove("oculto");
+        await cargarFacturasInicio();return;
+      }
       await cargarInspectores(sesion.zona);
 
       document.getElementById("pasoUsuario")
@@ -1186,29 +1258,24 @@ async function cargarInspectores(zona) {
   }
 }
 
-function confirmarInspector() {
-  const select1 = document.getElementById("listaInspector1");
-  const select2 = document.getElementById("listaInspector2");
-  const errorDiv = document.getElementById("errorInspector");
-
-  errorDiv.textContent = "";
-
-  if (!select1.value || !select2.value) {
-    errorDiv.textContent = "Selecciona los dos inspectores";
-    return;
-  }
-
-  if (select1.value === select2.value) {
-    errorDiv.textContent = "Inspector 1 e Inspector 2 no pueden ser el mismo";
-    return;
-  }
-
-   sesion.inspector1 = select1.value;
-  sesion.inspector2 = select2.value;
-
-  document.getElementById("pasoInspector").classList.add("oculto");
-  document.getElementById("pasoFactura").classList.remove("oculto");
-  cargarFacturasInicio();
+async function confirmarInspector() {
+  if(reservandoInspectoresV18||sesionBloqueada)return;
+  const a=document.getElementById("listaInspector1").value,b=document.getElementById("listaInspector2").value;
+  const error=document.getElementById("errorInspector");error.textContent="";
+  if(!a||!b||a===b){error.textContent="Selecciona dos inspectores distintos.";return;}
+  if(!navigator.onLine){error.textContent="Necesitas conexión para reservar inspectores.";return;}
+  const identidad=sesion.token,boton=document.querySelector('#pasoInspector button');
+  reservandoInspectoresV18=true;boton.disabled=true;boton.textContent="Validando inspectores...";
+  try {
+    const r=await llamarBackend("reservarInspectores",{inspector1:a,inspector2:b});
+    if(sesion.token!==identidad)throw new Error("La sesión cambió.");
+    if(!r?.exito||!r.idParejaSesion||!Array.isArray(r.inspectores)||r.inspectores.length!==2)throw new Error(r?.mensaje||"No se confirmó la reserva de inspectores.");
+    sesion.inspector1=r.inspectores[0];sesion.inspector2=r.inspectores[1];sesion.idParejaSesion=r.idParejaSesion;
+    sesion.seleccionFacturaPendienteV18=true;localStorage.setItem("sesionApp",JSON.stringify(sesion));
+    document.getElementById("pasoInspector").classList.add("oculto");document.getElementById("pasoFactura").classList.remove("oculto");
+    await cargarFacturasInicio();
+  }catch(e){error.textContent=e.message||"No se pudo reservar. No puedes avanzar sin confirmación.";}
+  finally{reservandoInspectoresV18=false;boton.disabled=false;boton.textContent="Continuar";}
 }
 
 function describirDisponibles(lista) {
@@ -1273,6 +1340,7 @@ function confirmarFacturaInicial() {
 
   errorDiv.textContent = "";
   sesion.facturaActual = select.value;
+  sesion.seleccionFacturaPendienteV18=false;
   guardarSesionYContinuar();
 }
 
@@ -1548,7 +1616,27 @@ function guardarSesionYContinuar() {
   mostrarPantallaPrincipal();
 }
 
-function mostrarPantallaPrincipal() {
+async function mostrarPantallaPrincipal() {
+  if (sesion.rol === "Cobrador" && !sesion.idParejaSesion) {
+    if (!navigator.onLine) { alert("Esta sesión debe confirmar sus inspectores en línea con la versión v18. Los cobros locales existentes se conservan."); return; }
+    try {
+      document.getElementById("pantallaPrincipal").classList.add("oculto");
+      document.querySelector(".caja").classList.remove("oculto");
+      document.getElementById("pasoUsuario").classList.add("oculto");
+      document.getElementById("pasoFactura").classList.add("oculto");
+      await cargarInspectores(sesion.zona);
+      if (sesion.inspector1) document.getElementById("listaInspector1").value=sesion.inspector1;
+      if (sesion.inspector2) document.getElementById("listaInspector2").value=sesion.inspector2;
+      document.getElementById("pasoInspector").classList.remove("oculto");
+      document.getElementById("errorInspector").textContent="Confirma los inspectores para registrar su reserva en el servidor.";
+    } catch(e) { alert(e.message || "No se pudieron consultar inspectores."); }
+    return;
+  }
+  if (sesion.rol === "Cobrador" && sesion.seleccionFacturaPendienteV18) {
+    document.querySelector(".caja").classList.remove("oculto");
+    document.getElementById("pasoUsuario").classList.add("oculto");document.getElementById("pasoInspector").classList.add("oculto");
+    document.getElementById("pasoFactura").classList.remove("oculto");await cargarFacturasInicio();return;
+  }
   if (sesion.rol === "Coordinador") {
     mostrarPantallaCoordinador();
     return;
@@ -1569,6 +1657,8 @@ function mostrarPantallaPrincipal() {
   const esContador = sesion.rol === "Contador";
   const esSupervisor = sesion.rol === "Supervisor";
   const esAdministrador = sesion.rol === "Administrador";
+  document.getElementById("bloqueZonaConsulta").classList.toggle("oculto", !esAdministrador);
+  document.getElementById("botonPreciosV18").classList.toggle("oculto", !(esContador || esAdministrador));
 
   const puedeConsultarFecha =
     esContador || esSupervisor || esAdministrador;
@@ -1795,6 +1885,8 @@ async function crearPendienteDesdeFormulario(
   const pendiente = {
     versionCola: 2,
     idCobro: datos.idCobro,
+    versionTarifa: datos.versionTarifa,
+    idParejaSesion: datos.idParejaSesion,
     estado: "PENDIENTE",
     creadoEn: datos.fechaCaptura,
     fechaCaptura: datos.fechaCaptura,
@@ -2095,8 +2187,17 @@ async function prepararTrabajoOffline() {
       );
     }
 
+    if(!sesion.idParejaSesion)throw new Error("Primero confirma tus inspectores con v18.");
+    if(!precios.length||!precios[0].versionTarifa)throw new Error("El servidor no entregó precios versionados v18.");
+    const resumenMes = await llamarBackend("resumenClasificaciones", {zona:sesion.zona,fecha:obtenerFechaLocalISO()});
+    const resumenAtras = await llamarBackend("resumenAtrasadosClasificacion", {zona:sesion.zona});
+    const atrasados = await llamarBackend("clientesAtrasados", {zona:sesion.zona});
+    if(!resumenMes?.exito||!resumenAtras?.exito||!Array.isArray(atrasados))throw new Error("No se completaron los resúmenes o atrasados del paquete.");
     const paquete = {
       version: 1,
+      versionTarifa: precios[0].versionTarifa,
+      idParejaSesion: sesion.idParejaSesion,
+      atrasados,
       preparadoEn: new Date().toISOString(),
       usuario: sesion.usuario,
       zona: sesion.zona,
@@ -2113,6 +2214,8 @@ async function prepararTrabajoOffline() {
       JSON.stringify(paquete)
     );
 
+    guardarResumenV18("mensual",sesion.zona,resumenMes);
+    guardarResumenV18("atrasados",sesion.zona,resumenAtras);
     const verificado = obtenerPaqueteOffline();
 
     if (
@@ -2164,11 +2267,9 @@ async function prepararTrabajoOffline() {
   }
 }
 
-function obtenerFechaLocalISO(fecha = new Date()) {
-  const compensacion = fecha.getTimezoneOffset() * 60000;
-  return new Date(fecha.getTime() - compensacion)
-    .toISOString()
-    .slice(0, 10);
+function obtenerFechaLocalISO(fecha=new Date()) {
+  const partes=Object.fromEntries(new Intl.DateTimeFormat("en-GB",{timeZone:"America/El_Salvador",year:"numeric",month:"2-digit",day:"2-digit"})
+    .formatToParts(fecha).map(p=>[p.type,p.value]));return partes.year+"-"+partes.month+"-"+partes.day;
 }
 
 function inicializarFechaAvance() {
@@ -2188,14 +2289,8 @@ function actualizarPantallaPrincipal() {
 }
 
 function consultarAvancePorFecha() {
-  const fecha = document.getElementById("campoFechaAvance").value;
-
-  if (!fecha) {
-    alert("Selecciona una fecha para consultar.");
-    return;
-  }
-
-  cargarAvanceDelDia(fecha);
+  const fecha=document.getElementById("campoFechaAvance").value;if(!fecha){alert("Selecciona una fecha.");return;}
+  cargarAvanceDelDia(fecha);cargarResumenClasV18();
 }
 
 async function cargarAvanceDelDia(fechaSeleccionada = null) {
@@ -2221,12 +2316,15 @@ async function cargarAvanceDelDia(fechaSeleccionada = null) {
     : "";
 
   try {
+    const identidadAvanceV18 = sesion.token;
+    const alcanceAvanceV18 = zonaConsultaV18();
     const avance = await llamarBackend("avanceDelDia", {
-      zona: sesion.zona || "",
+      zona: zonaConsultaV18(),
       fecha: fechaConsulta,
       pareja: parejaActual
     });
 
+    if (sesion.token!==identidadAvanceV18 || zonaConsultaV18()!==alcanceAvanceV18 || fechaConsulta!==fechaConsultaV18()) return;
     if (avance.exito === false) {
       throw new Error(avance.mensaje || "El servidor no pudo obtener el avance.");
     }
@@ -2323,6 +2421,7 @@ $${Number(item.monto).toFixed(2)}
 }
 
 async function cerrarSesion() {
+  if(reservandoInspectoresV18 || operacionPreciosV18) {alert("Espera a que termine la operación actual.");return;}
   if (gestionMedidorEnCurso || gestionFacturasEnCurso) { alert("Espera a que termine el cambio actual."); return; }
   if (guardandoCobroLocal || sincronizacionEnCurso) {
     alert(
@@ -2338,7 +2437,7 @@ async function cerrarSesion() {
   try {
     await llamarBackend("logout", {});
   } catch (error) {
-    // Sin conexión, se cierra la sesión local.
+    alert("No se confirmó el cierre en el servidor. Cerrar localmente no libera inspectores hasta que la sesión deje de estar activa.");
   }
 
   localStorage.removeItem("sesionApp");
@@ -2372,53 +2471,7 @@ function cambiarPestana(nombre) {
   }
 }
 
-async function cargarClientesAtrasados() {
-  if (sesion.rol === "Coordinador") return;
-  const cargando = document.getElementById("cargandoAtrasados");
-  const contenedor = document.getElementById("listaAtrasados");
-  cargando.classList.remove("oculto");
-
-  try {
-    let clientes = [];
-    if (sesion.rol === "Administrador") {
-      for (const z of ["Santa Ana", "Ahuachapan", "Sonsonate"]) {
-        clientes = clientes.concat(await llamarBackend("clientesAtrasados", { zona: z }));
-      }
-    } else {
-      clientes = await llamarBackend("clientesAtrasados", { zona: sesion.zona });
-    }
-
-    atrasadosCargados = true;
-    clientes.sort((a, b) => b["Dias Sin Cobro"] - a["Dias Sin Cobro"]);
-
-    contenedor.innerHTML = "";
-    if (clientes.length === 0) {
-      contenedor.innerHTML = '<div class="mensajeCentro">No hay clientes con más de 40 días sin cobro</div>';
-    } else {
-      clientes.forEach(c => {
-        const tarjeta = document.createElement("div");
-        tarjeta.className = "tarjetaCliente";
-               tarjeta.innerHTML = `
-          <div class="codigo">${escaparHtml(c["CODIGO"])}</div>
-          <div class="nombre">${escaparHtml(c["Nombre Cliente"])}</div>
-          <div class="fila">${escaparHtml(c["DIRECCION"])}</div>
-          <div class="fila">
-            ${c["Dias Sin Cobro"] === 9999
-              ? ""
-              : '<span class="badge badgePendiente">' + Number(c["Dias Sin Cobro"]) + ' días sin cobro</span>'}
-            <span class="badge badgePendiente">${escaparHtml(c["Texto Meses Sin Pagar"])}</span>
-          </div>
-        `;
-        tarjeta.addEventListener("click", () => abrirDetalleCliente(c));
-        contenedor.appendChild(tarjeta);
-      });
-    }
-  } catch (err) {
-    contenedor.innerHTML = '<div class="mensajeCentro">Sin conexión, intenta con señal</div>';
-  }
-
-  cargando.classList.add("oculto");
-}
+async function cargarClientesAtrasados() { return cargarResumenAtrasV18(); }
 
 async function cargarClasificacionesAgregar() {
   const zona = sesion.rol === "Administrador"
@@ -2847,107 +2900,7 @@ async function cargarClientesNoLiberados() {
 
 
 
-async function cargarClientesParaCobro() {
-  if (sesion.rol === "Coordinador") return;
-  const contenedor = document.getElementById("listaClientes");
-  const cargando = document.getElementById("cargandoCobros");
-
-  cargando.classList.remove("oculto");
-  contenedor.innerHTML = "";
-
-  try {
-    let clientes = [];
-
-    if (sesion.rol === "Administrador") {
-      const zonas = [
-        "Santa Ana",
-        "Ahuachapan",
-        "Sonsonate"
-      ];
-
-     for (const z of zonas) {
-  console.log("CLIENTES ADMIN: solicitando zona", z);
-
-  const resultado = await llamarBackend(
-    "clientesParaCobro",
-    { zona: z }
-  );
-
-  console.log("CLIENTES ADMIN: respuesta", {
-    zona: z,
-    esLista: Array.isArray(resultado),
-    cantidad: Array.isArray(resultado) ? resultado.length : null,
-    mensaje: resultado?.mensaje
-  });
-
-  if (!Array.isArray(resultado)) {
-    throw new Error(
-      resultado?.mensaje ||
-      "El servidor no devolvió una lista válida de clientes para " + z + "."
-    );
-  }
-
-  clientes = clientes.concat(resultado);
-}
-
-} else {
-  const resultado = await llamarBackend(
-    "clientesParaCobro",
-    { zona: sesion.zona }
-  );
-
-  if (!Array.isArray(resultado)) {
-    throw new Error(
-      resultado?.mensaje ||
-      "El servidor no devolvió una lista válida de clientes."
-    );
-  }
-
-  clientes = resultado;
-}
-
-localStorage.setItem(
-  "clientesParaCobro",
-  JSON.stringify(clientes)
-);
-
-    pintarListaClientes(clientes);
-
-  } catch (err) {
-    console.error("Error al cargar clientes:", err);
-
-    const guardado = localStorage.getItem(
-      "clientesParaCobro"
-    );
-
-    if (guardado) {
-      try {
-        const clientesGuardados = JSON.parse(guardado);
-
-        if (Array.isArray(clientesGuardados)) {
-          pintarListaClientes(clientesGuardados);
-        } else {
-          throw new Error("La copia local de clientes no es válida.");
-        }
-
-      } catch (errorLocal) {
-        contenedor.innerHTML =
-          '<div class="mensajeCentro">' +
-          escaparHtml(err.message || "No se pudieron cargar los clientes.") +
-          "</div>";
-      }
-
-    } else {
-      contenedor.innerHTML =
-        '<div class="mensajeCentro">' +
-        escaparHtml(err.message || "No se pudieron cargar los clientes.") +
-        "</div>";
-    }
-
-  } finally {
-    cargando.classList.add("oculto");
-  }
-}
+async function cargarClientesParaCobro() { return cargarResumenClasV18(); }
 
 let clientesCargados = [];
 
@@ -3010,6 +2963,7 @@ async function desactivarClienteDesdeTarjeta(codigo, tarjeta) {
 }
 
 function filtrarClientes() {
+  if(!clasificacionActualV18)return;
   const texto = (document.getElementById("campoBuscar").value || "").trim().toLowerCase();
   const contenedor = document.getElementById("listaClientes");
   contenedor.textContent = "";
@@ -3128,16 +3082,22 @@ let clienteActual = null;
 let listaPrecios = [];
 
 async function obtenerListaPrecios() {
-  if (listaPrecios.length > 0) return listaPrecios;
-
-  try {
-    listaPrecios = await llamarBackend("precios", {});
-    localStorage.setItem("listaPrecios", JSON.stringify(listaPrecios));
-  } catch (err) {
-    const guardado = localStorage.getItem("listaPrecios");
-    listaPrecios = guardado ? JSON.parse(guardado) : [];
+  let p=obtenerPaqueteOffline();const paquetePropio=p&&p.usuario===sesion.usuario&&p.zona===sesion.zona;
+  if(navigator.onLine) {
+    try {
+      const r=await llamarBackend("precios",{});
+      if(!Array.isArray(r)||!r.length||!r[0].versionTarifa||r.some(x=>x.versionTarifa!==r[0].versionTarifa))
+        throw new Error("El servidor debe devolver una tarifa versionada v18. No captures con precios sin versión.");
+      listaPrecios=r;localStorage.setItem("listaPrecios",JSON.stringify(r));
+      if(paquetePropio){p.precios=r;p.versionTarifa=r[0].versionTarifa;localStorage.setItem(CLAVE_PAQUETE_OFFLINE,JSON.stringify(p));}
+      return listaPrecios;
+    } catch(e) {
+      if(!paquetePropio||!p.precios?.[0]?.versionTarifa)throw e;
+      console.warn("Se usa la tarifa original del paquete por fallo de consulta; su versión se conservará en el cobro.",e);
+    }
   }
-  return listaPrecios;
+  if(!paquetePropio||!p.precios?.length||!p.precios[0].versionTarifa)throw new Error("Prepara los precios versionados en línea antes de trabajar sin conexión.");
+  listaPrecios=p.precios;return listaPrecios;
 }
 
 function buscarMontoPorConsumo(consumoTotal) {
@@ -3146,6 +3106,9 @@ function buscarMontoPorConsumo(consumoTotal) {
 }
 
 async function abrirDetalleCliente(cliente, verificado = false) {
+  if (sesion.rol === "Cobrador" && String(cliente.Liberado || "").trim().toUpperCase() !== "SI") {
+    alert("Este cliente no está liberado para un nuevo cobro. Su estado ya fue gestionado o requiere liberación."); return;
+  }
 if (sesion.rol !== "Cobrador") {
   await abrirEditorMedidor(cliente);
   return;
@@ -3168,7 +3131,11 @@ document.getElementById("detFotoFactura").value = "";
 document.getElementById("detFotoNotificacion").value = "";
 mostrarFotoElegida("detFotoFactura");
 mostrarFotoElegida("detFotoNotificacion");
-  await obtenerListaPrecios();
+  try { await obtenerListaPrecios(); }
+  catch(e) {
+    alert(e.message || "No se pudieron verificar los precios. Los pendientes guardados se conservan.");
+    document.getElementById("pantallaDetalle").classList.add("oculto");document.getElementById("pantallaPrincipal").classList.remove("oculto");return;
+  }
 
   document.getElementById("pantallaPrincipal").classList.add("oculto");
   document.getElementById("pantallaDetalle").classList.remove("oculto");
@@ -3436,6 +3403,10 @@ async function pedirBackendParaSincronizar(accion, datos, identidad) {
 function datosDesdePendiente(p) {
   return {
     idCobro: p.idCobro,
+    versionTarifa: p.versionTarifa,
+    idParejaSesion: p.idParejaSesion,
+    inspector1: p.inspector1,
+    inspector2: p.inspector2,
     codigo: p.codigo,
     baseMedidor: p.baseMedidor,
     estado: p.estadoCobro,
@@ -3812,8 +3783,13 @@ const fechaCaptura = new Date().toISOString();
       );
     }
 
+    if(!sesion.idParejaSesion)throw new Error("Confirma inspectores en el servidor antes de capturar.");
+    const tarifaV18 = listaPrecios[0]?.versionTarifa;
+    if(!tarifaV18)throw new Error("La tarifa no tiene versión. Descarga precios v18 antes de capturar.");
     const datos = {
       idCobro: generarIdCobroOffline(),
+      versionTarifa: tarifaV18,
+      idParejaSesion: sesion.idParejaSesion,
       codigo: cliente["CODIGO"],
       estado,
 fechaCaptura,
@@ -4700,7 +4676,7 @@ let solicitudCoordinador = 0;
 function mostrarPantallaCoordinador() {
   document.body.classList.add("modoApp");
   document.querySelector(".caja").classList.add("oculto");
-  ["pantallaPrincipal","pantallaDetalle","pantallaPendientesOffline","pantallaFacturas",
+  ["pantallaPreciosV18","pantallaPrincipal","pantallaDetalle","pantallaPendientesOffline","pantallaFacturas",
    "pantallaLiberar","pantallaAgregar","pantallaUsuarios","pantallaUbicaciones"]
     .forEach(id => document.getElementById(id)?.classList.add("oculto"));
   document.getElementById("pantallaCoordinador").classList.remove("oculto");
@@ -4970,6 +4946,165 @@ async function actualizarTalonarioTrasConexion() {
 window.addEventListener("online",actualizarTalonarioTrasConexion);
 window.addEventListener("DOMContentLoaded",actualizarTalonarioTrasConexion);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")actualizarTalonarioTrasConexion();});
+
+
+function zonaConsultaV18(){return sesion.rol==="Administrador"?document.getElementById("zonaConsultaGeneral").value:String(sesion.zona||"").trim();}
+function fechaConsultaV18(){return ["Supervisor","Contador","Administrador"].includes(sesion.rol)?
+  (document.getElementById("campoFechaAvance").value||obtenerFechaLocalISO()):obtenerFechaLocalISO();}
+function claveResumenV18(tipo,zona){return "v18_"+tipo+"_"+encodeURIComponent(sesion.usuario||"")+"_"+encodeURIComponent(zona||"global");}
+function guardarResumenV18(tipo,zona,datos){
+  try{localStorage.setItem(claveResumenV18(tipo,zona),JSON.stringify({usuario:sesion.usuario,zona,datos,guardado:new Date().toISOString()}));}
+  catch(e){console.error("No se pudo guardar el resumen local",e);}
+}
+function leerResumenV18(tipo,zona){try{const p=JSON.parse(localStorage.getItem(claveResumenV18(tipo,zona))||"null");
+  return p&&p.usuario===sesion.usuario&&p.zona===zona?p:null;}catch(e){return null;}}
+function cambiarZonaConsultaV18(){atrasadosCargados=false;clasificacionActualV18=null;atrasadaActualV18=null;
+  actualizarPantallaPrincipal();if(!document.getElementById("tabAtrasados").classList.contains("oculto"))cargarClientesAtrasados();}
+function volverClasificaciones(){clasificacionActualV18=null;detalleClasV18++;clientesCargados=[];
+  document.getElementById("detalleClasificacion").classList.add("oculto");document.getElementById("listaClasificaciones").classList.remove("oculto");}
+function volverClasificacionesAtrasadas(){atrasadaActualV18=null;detalleAtrasV18++;
+  document.getElementById("detalleClasificacionAtrasada").classList.add("oculto");document.getElementById("clasificacionesAtrasadas").classList.remove("oculto");}
+function pintarTarjetasClasV18(lista,id,tipo){
+  const cont=document.getElementById(id);cont.replaceChildren();
+  if(!lista.length){const d=document.createElement("div");d.className="mensajeCentro";d.textContent="No hay clasificaciones para esta consulta.";cont.appendChild(d);return;}
+  lista.forEach(item=>{
+    const tarjeta=document.createElement("div");tarjeta.className="tarjetaCliente";
+    const linea=(texto,clase="fila")=>{const d=document.createElement("div");d.className=clase;d.textContent=texto;tarjeta.appendChild(d);};
+    linea(item.clasificacion,"nombre");linea("Zona: "+item.zona);
+    if(tipo==="atrasados")linea("Clientes con más de 40 días sin pago: "+item.total);
+    else {linea("Clientes del mes: "+item.total+" · Con pago: "+item.cobrados+" · Sin pago: "+item.pendientes);
+      linea("Notificados sin pago: "+(item.notificadosSinPago||0)+". Un pago parcial puede conservar deuda.");}
+    const boton=document.createElement("button");boton.type="button";
+    boton.textContent=tipo==="atrasados"?"Ver clientes atrasados":resumenMensualV18?.esCierre?"Ver clientes actuales de esta clasificación":"Ver clientes";
+    boton.addEventListener("click",()=>tipo==="atrasados"?abrirClasificacionAtrasadaV18(item):abrirClasificacionV18(item));
+    tarjeta.appendChild(boton);cont.appendChild(tarjeta);
+  });
+}
+async function cargarResumenClasV18(){
+  if(sesion.rol==="Coordinador")return;
+  const n=++consultaClasV18,zona=zonaConsultaV18(),fecha=fechaConsultaV18(),token=sesion.token;
+  volverClasificaciones();const estado=document.getElementById("estadoClasificaciones");estado.textContent="Consultando clasificaciones del mes...";
+  document.getElementById("listaClasificaciones").replaceChildren();
+  try {
+    let r,copia=null;
+    if(navigator.onLine){r=await llamarBackend("resumenClasificaciones",{zona,fecha});
+      if(!r?.exito||!Array.isArray(r.clasificaciones))throw new Error(r?.mensaje||"Respuesta de clasificaciones inválida.");
+    }else {copia=leerResumenV18("mensual",zona);if(!copia)throw new Error("No tienes un resumen mensual descargado para esta zona. Conéctate y prepara el trabajo.");r=copia.datos;}
+    if(n!==consultaClasV18||token!==sesion.token||zona!==zonaConsultaV18()||fecha!==fechaConsultaV18())return;
+    resumenMensualV18=r;if(navigator.onLine)guardarResumenV18("mensual",zona,r);
+    estado.textContent=(r.esCierre?"Cierre del mes anterior: ":"Avance mensual: ")+r.mes+
+      " · Clientes distintos, no cantidad de recibos."+(copia?" Copia local de "+formatearFechaOffline(copia.guardado)+"; no es un resultado en tiempo real.":"")+
+      (r.advertencia?" "+r.advertencia:"");
+    pintarTarjetasClasV18(r.clasificaciones,"listaClasificaciones","cobros");
+  }catch(e){if(n===consultaClasV18)estado.textContent=e.message||"No se pudo consultar el mes.";}
+}
+async function abrirClasificacionV18(item){
+  const n=++detalleClasV18,token=sesion.token;clasificacionActualV18=item;
+  document.getElementById("listaClasificaciones").classList.add("oculto");document.getElementById("detalleClasificacion").classList.remove("oculto");
+  document.getElementById("tituloClasificacion").textContent=item.clasificacion+" · "+item.zona;
+  document.getElementById("avisoDetalleClasificacion").textContent=resumenMensualV18?.esCierre?
+    "Las cifras superiores pertenecen al cierre. Esta lista muestra clientes actuales, no una reconstrucción de clientes del mes anterior.":
+    "Lista actual. El Cobrador solo registra cobros de clientes liberados. Los pendientes locales aún no están incluidos en los totales del servidor.";
+  document.getElementById("campoBuscar").value="";const carga=document.getElementById("cargandoCobros");carga.classList.remove("oculto");
+  document.getElementById("listaClientes").replaceChildren();
+  try {
+    let clientes;
+    if(navigator.onLine){const r=await llamarBackend("clientesClasificacion",{zona:item.zona,clasificacion:item.clasificacion,tipo:"cobros"});
+      if(!r?.exito||!Array.isArray(r.clientes))throw new Error(r?.mensaje||"No se pudo cargar la clasificación.");clientes=r.clientes;
+    }else {const p=obtenerPaqueteOffline();if(!p||p.usuario!==sesion.usuario||p.zona!==item.zona)throw new Error("No hay clientes preparados para esta clasificación.");
+      clientes=p.clientes.filter(c=>String(c.Clasificacion||"Sin clasificación").trim()===item.clasificacion);
+      document.getElementById("avisoDetalleClasificacion").textContent="Sin conexión: solo clientes descargados al preparar trabajo; esta lista puede ser parcial.";}
+    if(n!==detalleClasV18||token!==sesion.token)return;
+    pintarListaClientes(clientes);
+  }catch(e){if(n===detalleClasV18)document.getElementById("listaClientes").textContent=e.message||"Error de consulta.";}
+  finally{if(n===detalleClasV18)carga.classList.add("oculto");}
+}
+async function cargarResumenAtrasV18(){
+  if(sesion.rol==="Coordinador")return;
+  const n=++consultaAtrasV18,zona=zonaConsultaV18(),token=sesion.token;volverClasificacionesAtrasadas();
+  const estado=document.getElementById("estadoClasificacionesAtrasadas");estado.textContent="Consultando atrasos por clasificación...";
+  document.getElementById("clasificacionesAtrasadas").replaceChildren();
+  try {
+    let r,copia=null;
+    if(navigator.onLine){r=await llamarBackend("resumenAtrasadosClasificacion",{zona});if(!r?.exito||!Array.isArray(r.clasificaciones))throw new Error(r?.mensaje||"Respuesta de atrasos inválida.");}
+    else {copia=leerResumenV18("atrasados",zona);if(!copia)throw new Error("No tienes un resumen de atrasos descargado.");r=copia.datos;}
+    if(n!==consultaAtrasV18||token!==sesion.token||zona!==zonaConsultaV18())return;
+    resumenAtrasadosV18=r;atrasadosCargados=true;if(navigator.onLine)guardarResumenV18("atrasados",zona,r);
+    estado.textContent="Corte de atrasos: "+r.fechaCorte+". Una notificación no reinicia los días sin pago."+
+      (copia?" Copia local de "+formatearFechaOffline(copia.guardado)+".":"")+
+      (r.sinAntiguedadVerificable?" "+r.sinAntiguedadVerificable+" clientes sin fecha suficiente para verificar antigüedad; no se afirman como mayores de 40 días.":"");
+    pintarTarjetasClasV18(r.clasificaciones,"clasificacionesAtrasadas","atrasados");
+  }catch(e){if(n===consultaAtrasV18)estado.textContent=e.message||"No se pudieron consultar atrasos.";}
+}
+async function abrirClasificacionAtrasadaV18(item){
+  const n=++detalleAtrasV18,token=sesion.token;atrasadaActualV18=item;
+  document.getElementById("clasificacionesAtrasadas").classList.add("oculto");document.getElementById("detalleClasificacionAtrasada").classList.remove("oculto");
+  document.getElementById("tituloClasificacionAtrasada").textContent=item.clasificacion+" · "+item.zona;
+  const lista=document.getElementById("listaAtrasados"),carga=document.getElementById("cargandoAtrasados");lista.replaceChildren();carga.classList.remove("oculto");
+  try {
+    let clientes;
+    if(navigator.onLine){const r=await llamarBackend("clientesClasificacion",{zona:item.zona,clasificacion:item.clasificacion,tipo:"atrasados"});
+      if(!r?.exito||!Array.isArray(r.clientes))throw new Error(r?.mensaje||"No se pudo cargar el detalle.");clientes=r.clientes;
+    }else {const p=obtenerPaqueteOffline();if(!p||p.usuario!==sesion.usuario||p.zona!==item.zona||!Array.isArray(p.atrasados))throw new Error("No descargaste el detalle de atrasados.");
+      clientes=p.atrasados.filter(c=>String(c.Clasificacion||"Sin clasificación").trim()===item.clasificacion);}
+    if(n!==detalleAtrasV18||token!==sesion.token)return;
+    if(!clientes.length)lista.textContent="No hay clientes para este corte.";
+    clientes.forEach(c=>{const t=document.createElement("div");t.className="tarjetaCliente";
+      t.innerHTML='<div class="codigo">'+escaparHtml(c.CODIGO)+'</div><div class="nombre">'+escaparHtml(c["Nombre Cliente"])+
+        '</div><div class="fila">'+escaparHtml(c.DIRECCION)+'</div><div class="fila">'+escaparHtml(c["Dias Sin Cobro"])+
+        ' días sin pago</div><div class="fila">Último pago: '+escaparHtml(c["Fecha Ultimo Cobro"]||"Sin pago registrado")+'</div>';
+      t.addEventListener("click",()=>abrirDetalleCliente(c));lista.appendChild(t);});
+  }catch(e){if(n===detalleAtrasV18)lista.textContent=e.message||"Error de consulta.";}finally{if(n===detalleAtrasV18)carga.classList.add("oculto");}
+}
+function parsearCSVPreciosV18(texto){
+  const csv=String(texto||"").replace(/^\uFEFF/,"");if(!csv.trim()||csv.length>200000)throw new Error("CSV vacío o demasiado grande.");
+  const sep=csv.split(/\r?\n/)[0].includes(";")?";":",",filas=[];let fila=[],campo="",comillas=false;
+  for(let i=0;i<csv.length;i++){const c=csv[i];if(c==='"'){if(comillas&&csv[i+1]==='"'){campo+='"';i++;}else comillas=!comillas;}
+    else if(!comillas&&c===sep){fila.push(campo);campo="";}else if(!comillas&&(c==='\n'||c==='\r')){
+      if(c==='\r'&&csv[i+1]==='\n')i++;fila.push(campo);filas.push(fila);fila=[];campo="";}else campo+=c;}
+  if(comillas)throw new Error("CSV con comillas sin cerrar.");fila.push(campo);filas.push(fila);
+  const normal=n=>String(n).trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");
+  const cab=(filas.shift()||[]).map(normal);if(cab.length!==2||cab[0]!=="consumo"||cab[1]!=="monto")throw new Error("Encabezados requeridos: Consumo,Monto.");
+  const vistos=new Set(),precios=[];
+  filas.forEach((f,i)=>{if(f.every(x=>!String(x).trim()))return;if(f.length!==2)throw new Error("Número de columnas inválido, fila "+(i+2));
+    const numeros=f.map(x=>{let s=String(x).trim();if(sep===";")s=s.replace(",",".");if(!/^\d+(?:\.\d+)?$/.test(s))throw new Error("Valor no válido, fila "+(i+2));
+      const v=Number(s);if(!Number.isFinite(v)||v>Number.MAX_SAFE_INTEGER)throw new Error("Número fuera de rango.");return v;});
+    if(vistos.has(numeros[0]))throw new Error("Consumo duplicado: "+numeros[0]);vistos.add(numeros[0]);precios.push({Consumo:numeros[0],Monto:numeros[1]});});
+  if(!precios.length||precios.length>10000)throw new Error("Cantidad de filas inválida.");precios.sort((a,b)=>a.Consumo-b.Consumo);
+  const normalizado="Consumo,Monto\n"+precios.map(p=>p.Consumo+","+p.Monto).join("\n");if(normalizado.length>45000)throw new Error("CSV supera el límite del respaldo de tarifa.");
+  return {precios,csv:normalizado};
+}
+function abrirPreciosV18(){
+  if(!["Contador","Administrador"].includes(sesion.rol))return;
+  document.getElementById("pantallaPrincipal").classList.add("oculto");document.getElementById("pantallaPreciosV18").classList.remove("oculto");
+  preciosCSVV18=null;document.getElementById("archivoPreciosV18").value="";document.getElementById("estadoPreciosV18").textContent="";
+  document.getElementById("vistaPreciosV18").replaceChildren();document.getElementById("botonCargarPreciosV18").disabled=true;
+}
+function cerrarPreciosV18(){if(operacionPreciosV18)return;document.getElementById("pantallaPreciosV18").classList.add("oculto");document.getElementById("pantallaPrincipal").classList.remove("oculto");}
+async function previsualizarPreciosV18(){
+  const archivo=document.getElementById("archivoPreciosV18").files?.[0],estado=document.getElementById("estadoPreciosV18"),boton=document.getElementById("botonCargarPreciosV18");
+  preciosCSVV18=null;boton.disabled=true;document.getElementById("vistaPreciosV18").replaceChildren();if(!archivo)return;
+  try{if(archivo.size>300000)throw new Error("Archivo demasiado grande.");const datos=parsearCSVPreciosV18(await archivo.text());
+    if(document.getElementById("archivoPreciosV18").files?.[0]!==archivo)return;
+    preciosCSVV18=Object.assign(datos,{nombre:archivo.name});estado.textContent=datos.precios.length+" filas válidas. Vista previa de las primeras 12.";
+    const tabla=document.createElement("table");tabla.style.width="100%";tabla.innerHTML="<thead><tr><th>Consumo</th><th>Monto</th></tr></thead>";
+    const body=document.createElement("tbody");datos.precios.slice(0,12).forEach(p=>{const tr=document.createElement("tr");[p.Consumo,p.Monto].forEach(v=>{const td=document.createElement("td");td.textContent=String(v);tr.appendChild(td);});body.appendChild(tr);});
+    tabla.appendChild(body);document.getElementById("vistaPreciosV18").appendChild(tabla);boton.disabled=false;
+  }catch(e){estado.textContent=e.message||"No se pudo leer el CSV.";}
+}
+async function guardarPreciosV18(){
+  if(!preciosCSVV18||operacionPreciosV18||sesionBloqueada||!["Contador","Administrador"].includes(sesion.rol))return;
+  if(!navigator.onLine){alert("Necesitas conexión para actualizar la tarifa.");return;}
+  if(!confirm("¿Activar inmediatamente la nueva tarifa de "+preciosCSVV18.precios.length+" filas?\nSe conserva el respaldo de la anterior. Los pendientes deben usar su tarifa original."))return;
+  const idCarga=generarIdCobroOffline(),panel=document.getElementById("pantallaPreciosV18"),estado=document.getElementById("estadoPreciosV18");
+  operacionPreciosV18=true;panel.inert=true;estado.textContent="Guardando nueva tarifa...";let confirmado=false;
+  try{const r=await llamarBackend("cargarPreciosCSV",{csv:preciosCSVV18.csv,idCarga});if(!r?.exito)throw new Error(r?.mensaje||"No se confirmó la carga.");
+    confirmado=true;listaPrecios=[];preciosCSVV18=null;document.getElementById("botonCargarPreciosV18").disabled=true;
+    estado.textContent="Tarifa activa: "+r.versionTarifa+" · "+r.filas+" filas.";alert(estado.textContent);
+  }catch(e){estado.textContent=confirmado?"Tarifa confirmada; actualiza la consulta, no repitas la carga.":
+    "No se pudo confirmar: "+(e.message||"Error de conexión.")+" Revisa PreciosVersiones antes de repetir. ID: "+idCarga;}
+  finally{operacionPreciosV18=false;panel.inert=false;}
+}
 
 </script>
 
