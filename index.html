@@ -4858,7 +4858,69 @@ async function abrirEditorMedidor(cliente) {
       const pendientes=await obtenerPendientesOffline();
       if(pendientes.some(p=>String(p.codigo)===String(cliente["CODIGO"])))throw new Error("Este cliente tiene un cobro pendiente en este teléfono. Sincronízalo o resuelve su revisión antes de reemplazar el medidor.");
     }
-    const r=await llamarBackend("consultarClienteMedidor",{codigo:cliente["CODIGO"],zona:cliente["Zona"]||sesion.zona});
+    const codigoCliente = String(
+  cliente?.["CODIGO"] ?? ""
+).trim();
+
+const zonaDelCliente = String(
+  cliente?.["Zona"] ?? ""
+).trim();
+
+const zonaDelUsuario = String(
+  sesion.zona ?? ""
+).trim();
+
+// Administrador necesita la zona del cliente seleccionado.
+// Los demás roles consultan su zona asignada.
+const zonaConsulta = sesion.rol === "Administrador"
+  ? zonaDelCliente
+  : zonaDelUsuario;
+
+console.log("MEDIDOR: solicitud", {
+  accion: "consultarClienteMedidor",
+  rol: sesion.rol,
+  codigo: codigoCliente,
+  zonaDelCliente: zonaDelCliente,
+  zonaDelUsuario: zonaDelUsuario,
+  zonaEnviada: zonaConsulta,
+  camposCliente: Object.keys(cliente || {})
+});
+
+if (!codigoCliente) {
+  throw new Error(
+    "La tarjeta seleccionada no contiene el campo CODIGO del cliente."
+  );
+}
+
+if (!zonaConsulta) {
+  throw new Error(
+    sesion.rol === "Administrador"
+      ? "La tarjeta seleccionada no contiene la Zona del cliente."
+      : "La sesión no contiene la zona asignada al usuario."
+  );
+}
+
+if (
+  sesion.rol !== "Administrador" &&
+  zonaDelCliente &&
+  zonaDelCliente !== zonaDelUsuario
+) {
+  throw new Error(
+    "El cliente seleccionado pertenece a otra zona."
+  );
+}
+
+const r = await llamarBackend("consultarClienteMedidor", {
+  codigo: codigoCliente,
+  zona: zonaConsulta
+});
+
+console.log("MEDIDOR: respuesta", {
+  exito: r?.exito,
+  mensaje: r?.mensaje,
+  tieneCliente: !!r?.cliente,
+  tieneBaseMedidor: !!r?.baseMedidor
+});
     if(!r?.exito||!r.cliente)throw new Error(r?.mensaje||"No se pudo consultar el cliente.");
     if(sesion.usuario!==identidad.usuario||sesion.token!==identidad.token)throw new Error("La sesión cambió.");
     const cobrador=sesion.rol==="Cobrador";
