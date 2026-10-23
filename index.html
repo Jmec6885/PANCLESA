@@ -1075,6 +1075,15 @@ try {
     }
 
     return resultado;
+    } catch (error) {
+    console.error("FALLO_BACKEND", {
+      accion: accion,
+      nombre: error?.name || "",
+      mensaje: error?.message || String(error)
+    });
+
+    throw error;
+
   } finally {
     clearTimeout(limite);
   }
