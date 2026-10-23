@@ -1022,65 +1022,109 @@ async function llamarBackend(accion, datos) {
     { accion: accion, token: sesion.token || "" },
     datos
   );
+
   const controlador = new AbortController();
-  const limite = setTimeout(() => controlador.abort(), 45000);
+  const inicio = Date.now();
+
+  const limite = setTimeout(() => {
+    controlador.abort();
+  }, 45000);
 
   try {
     const respuesta = await fetch(URL_APPS_SCRIPT, {
       method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8"
+      },
       body: JSON.stringify(cuerpo),
       signal: controlador.signal
     });
 
     const textoRespuesta = await respuesta.text();
 
-if (!respuesta.ok) {
-  console.error("Error HTTP del backend", {
-    accion,
-    estado: respuesta.status,
-    redirigida: respuesta.redirected,
-    tipo: respuesta.headers.get("content-type")
-  });
+    if (!respuesta.ok) {
+      console.error("Error HTTP del backend", {
+        accion: accion,
+        estado: respuesta.status,
+        redirigida: respuesta.redirected,
+        tipo: respuesta.headers.get("content-type")
+      });
 
-  throw new Error(
-    "La acción " + accion +
-    " recibió HTTP " + respuesta.status +
-    ". Revisa la implementación de Apps Script."
-  );
-}
+      throw new Error(
+        "Acción: " + accion +
+        "\nEl servidor respondió HTTP " + respuesta.status + "."
+      );
+    }
 
-let resultado;
+    let resultado;
 
-try {
-  resultado = JSON.parse(textoRespuesta);
-} catch (error) {
-  console.error("Respuesta no JSON del backend", {
-    accion,
-    estado: respuesta.status,
-    redirigida: respuesta.redirected,
-    tipo: respuesta.headers.get("content-type"),
-    pareceHtml: /^\s*</.test(textoRespuesta)
-  });
+    try {
+      resultado = JSON.parse(textoRespuesta);
 
-  throw new Error(
-    "La acción " + accion +
-    " recibió una página HTML o una respuesta inválida, no JSON."
-  );
-}
+    } catch (errorJSON) {
+      console.error("Respuesta no JSON del backend", {
+        accion: accion,
+        estado: respuesta.status,
+        redirigida: respuesta.redirected,
+        tipo: respuesta.headers.get("content-type"),
+        pareceHtml: /^\s*</.test(textoRespuesta)
+      });
+
+      throw new Error(
+        "Acción: " + accion +
+        "\nEl servidor no devolvió una respuesta JSON válida."
+      );
+    }
 
     if (resultado && resultado.sesionExpirada) {
       manejarSesionExpirada(resultado);
-      throw new Error(resultado.mensaje || "Sesión expirada.");
+
+      throw new Error(
+        resultado.mensaje || "Sesión expirada."
+      );
     }
 
     return resultado;
-    } catch (error) {
+
+  } catch (error) {
+    const segundos = Math.round(
+      (Date.now() - inicio) / 1000
+    );
+
+    const nombre = error?.name || "Error";
+    const mensajeOriginal = error?.message || String(error);
+
     console.error("FALLO_BACKEND", {
       accion: accion,
-      nombre: error?.name || "",
-      mensaje: error?.message || String(error)
+      nombre: nombre,
+      mensaje: mensajeOriginal,
+      segundos: segundos
     });
+
+    const esFalloDePeticion =
+      nombre === "AbortError" ||
+      /failed to fetch|networkerror|network request failed|load failed/i
+        .test(mensajeOriginal);
+
+    if (esFalloDePeticion) {
+      const detalle = nombre === "AbortError"
+        ? "Se agotó el tiempo de espera de la petición."
+        : "Falló el envío de la petición o la lectura de su respuesta.";
+
+      const errorVisible = new Error(
+        "Acción: " + accion +
+        "\n" + detalle +
+        "\nTiempo: " + segundos + " segundos." +
+        "\nMensaje original: " + mensajeOriginal +
+        "\n\nSi estabas guardando datos, comprueba si quedaron " +
+        "registrados antes de repetir la operación."
+      );
+
+      // Conserva el tipo para el manejo de conexión de la aplicación.
+      errorVisible.name = nombre;
+
+      throw errorVisible;
+    }
 
     throw error;
 
@@ -1088,7 +1132,6 @@ try {
     clearTimeout(limite);
   }
 }
-
 function manejarSesionExpirada(resultado = {}) {
   if (sesionBloqueada) return;
   sesionBloqueada = true;
