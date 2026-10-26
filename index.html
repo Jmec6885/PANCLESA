@@ -427,13 +427,6 @@ button:disabled{background:#94a3b8!important;cursor:default;}
 
    <!-- PASO 3: factura inicial -->
   <div id="pasoFactura" class="oculto">
-    <h2>¿Con qué factura inician?</h2>
-    <select id="campoFacturaInicial"></select>
-    <button onclick="confirmarFacturaInicial()">Continuar</button>
-    
-    <div class="error" id="errorFactura"></div>
-  </div>
-
 </div>
 
 <!-- PANTALLA PRINCIPAL -->
@@ -1375,30 +1368,155 @@ function describirDisponibles(lista) {
   return partes.slice(0, 8).join(", ") + (partes.length > 8 ? "…" : "");
 }
 
-async function cargarFacturasInicio(){
-  const select=document.getElementById("campoFacturaInicial"),info=document.getElementById("errorFactura");select.replaceChildren();info.textContent="Consultando tus facturas...";
-  try{
-    const disponibles=await obtenerFacturasDisponiblesSeguras();
-    disponibles.forEach(n=>{const op=document.createElement("option");op.value=String(n);op.textContent=String(n);select.appendChild(op);});
-    if(sesion.facturaActual&&disponibles.includes(Number(sesion.facturaActual)))select.value=sesion.facturaActual;
-    info.textContent=disponibles.length?"Disponibles: "+describirDisponibles(disponibles)+" · "+ultimaDisponibilidadV19.origen:
-      "Sin facturas elegibles. Puedes continuar solo para notificaciones; para cobrar deben asignarte facturas.";
-  }catch(e){info.textContent=(e.message||"No se pudo consultar")+". Una notificación no requiere factura.";}
+async function cargarFacturasInicio() {
+  const select = document.getElementById("campoFacturaInicial");
+  const info = document.getElementById("errorFactura");
+  const boton = document.getElementById("botonContinuarFactura");
+
+  select.replaceChildren();
+  boton.disabled = true;
+  info.textContent = "Consultando tus facturas...";
+
+  try {
+    const disponibles = await obtenerFacturasDisponiblesSeguras();
+
+    if (!disponibles.length) {
+      info.textContent =
+        "No tienes facturas disponibles. Solicita la asignación " +
+        "al contador o cierra sesión.";
+      return;
+    }
+
+    disponibles.forEach(n => {
+      const opcion = document.createElement("option");
+      opcion.value = String(n);
+      opcion.textContent = String(n);
+      select.appendChild(opcion);
+    });
+
+    if (
+      sesion.facturaActual &&
+      disponibles.includes(Number(sesion.facturaActual))
+    ) {
+      select.value = sesion.facturaActual;
+    }
+
+    info.textContent =
+      "Selecciona una de tus facturas disponibles.";
+
+    boton.disabled = false;
+
+  } catch (error) {
+    info.textContent =
+      "No se pudo verificar la disponibilidad: " +
+      (error.message || "Error de consulta.") +
+      " Puedes reintentar o cerrar sesión.";
+  }
 }
 
-function confirmarFacturaInicial() {
-  const select = document.getElementById("campoFacturaInicial");
-  const errorDiv = document.getElementById("errorFactura");
 
-  if (!select.value) {
-    errorDiv.textContent = "Selecciona con qué factura inician.";
+async function confirmarFacturaInicial() {
+  const select = document.getElementById("campoFacturaInicial");
+  const info = document.getElementById("errorFactura");
+  const boton = document.getElementById("botonContinuarFactura");
+
+  const texto = String(select.value || "").trim();
+  const token = sesion.token;
+
+  if (boton.disabled || !texto) {
+    info.textContent =
+      "No puedes continuar sin una factura disponible seleccionada.";
     return;
   }
 
-  errorDiv.textContent = "";
-  sesion.facturaActual = select.value;
-  sesion.seleccionFacturaPendienteV18=false;
-  guardarSesionYContinuar();
+  boton.disabled = true;
+
+  try {
+    const disponibles = await obtenerFacturasDisponiblesSeguras();
+
+    if (sesion.token !== token) {
+      throw new Error("La sesión cambió.");
+    }
+
+    const numero = Number(texto);
+
+    if (
+      !Number.isSafeInteger(numero) ||
+      !disponibles.includes(numero)
+    ) {
+      info.textContent =
+        "Esa factura ya no está disponible. Pulsa Actualizar facturas.";
+      return;
+    }
+
+    sesion.facturaActual = String(numero);
+    sesion.seleccionFacturaPendienteV18 = false;
+
+    info.textContent = "";
+    guardarSesionYContinuar();
+
+  } catch (error) {
+    info.textContent =
+      "No se confirmó la factura: " +
+      (error.message || "Error de consulta.");
+
+  } finally {
+    boton.disabled = false;
+  }
+}
+
+async function cerrarSesionDesdeFactura() {
+  const boton = document.getElementById("botonCerrarSesionFactura");
+  const info = document.getElementById("errorFactura");
+
+  if (boton.disabled) return;
+
+  if (!navigator.onLine) {
+    info.textContent =
+      "Necesitas conexión para confirmar el cierre y liberar " +
+      "los inspectores en el servidor.";
+    return;
+  }
+
+  if (!confirm(
+    "¿Cerrar esta sesión y volver al inicio? " +
+    "Los pendientes guardados en el teléfono se conservarán."
+  )) {
+    return;
+  }
+
+  boton.disabled = true;
+  boton.textContent = "Cerrando sesión...";
+
+  try {
+    const resultado = await llamarBackend("logout", {});
+
+    if (!resultado || !resultado.exito) {
+      throw new Error(
+        resultado?.mensaje ||
+        "El servidor no confirmó el cierre."
+      );
+    }
+
+    clearTimeout(temporizadorSincronizacion);
+
+    // Solo elimina la sesión. No borra los cobros locales.
+    localStorage.removeItem("sesionApp");
+    sesion.token = null;
+
+    location.reload();
+
+  } catch (error) {
+    info.textContent =
+      "No se confirmó el cierre: " +
+      (error.message || "Error de conexión.") +
+      " No se puede asegurar que los inspectores quedaron libres. " +
+      "Reintenta cuando tengas conexión.";
+
+  } finally {
+    boton.disabled = false;
+    boton.textContent = "Cerrar sesión";
+  }
 }
 
 let actualizandoFactura = false;
@@ -1574,26 +1692,95 @@ function guardarSesionYContinuar() {
 }
 
 async function mostrarPantallaPrincipal() {
-  if (esOperadorCobroV19() && !sesion.idParejaSesion) {
-    if (!navigator.onLine) { alert("Esta sesión debe confirmar sus inspectores en línea con la versión v18. Los cobros locales existentes se conservan."); return; }
+  // Primero: si ya tiene pareja, pero no factura,
+  // debe pasar por la selección de factura.
+  if (
+    esOperadorCobroV19() &&
+    sesion.idParejaSesion &&
+    !sesion.facturaActual
+  ) {
+    sesion.seleccionFacturaPendienteV18 = true;
+  }
+
+  // Segundo: si todavía no tiene pareja, debe confirmarla.
+  if (
+    esOperadorCobroV19() &&
+    !sesion.idParejaSesion
+  ) {
+    if (!navigator.onLine) {
+      alert(
+        "Esta sesión debe confirmar sus inspectores en línea. " +
+        "Los cobros locales existentes se conservan."
+      );
+      return;
+    }
+
     try {
-      document.getElementById("pantallaPrincipal").classList.add("oculto");
-      document.querySelector(".caja").classList.remove("oculto");
-      document.getElementById("pasoUsuario").classList.add("oculto");
-      document.getElementById("pasoFactura").classList.add("oculto");
+      document.getElementById("pantallaPrincipal")
+        .classList.add("oculto");
+
+      document.querySelector(".caja")
+        .classList.remove("oculto");
+
+      document.getElementById("pasoUsuario")
+        .classList.add("oculto");
+
+      document.getElementById("pasoFactura")
+        .classList.add("oculto");
+
       await cargarInspectores(sesion.zona);
-      if (sesion.inspector1) document.getElementById("listaInspector1").value=sesion.inspector1;
-      if (sesion.inspector2) document.getElementById("listaInspector2").value=sesion.inspector2;
-      document.getElementById("pasoInspector").classList.remove("oculto");
-      document.getElementById("errorInspector").textContent="Confirma los inspectores para registrar su reserva en el servidor.";
-    } catch(e) { alert(e.message || "No se pudieron consultar inspectores."); }
+
+      if (sesion.inspector1) {
+        document.getElementById("listaInspector1").value =
+          sesion.inspector1;
+      }
+
+      if (sesion.inspector2) {
+        document.getElementById("listaInspector2").value =
+          sesion.inspector2;
+      }
+
+      document.getElementById("pasoInspector")
+        .classList.remove("oculto");
+
+      document.getElementById("errorInspector").textContent =
+        "Confirma los inspectores para registrar " +
+        "su reserva en el servidor.";
+
+    } catch (e) {
+      alert(
+        e.message ||
+        "No se pudieron consultar inspectores."
+      );
+    }
+
     return;
   }
-  if (esOperadorCobroV19() && sesion.seleccionFacturaPendienteV18) {
-    document.querySelector(".caja").classList.remove("oculto");
-    document.getElementById("pasoUsuario").classList.add("oculto");document.getElementById("pasoInspector").classList.add("oculto");
-    document.getElementById("pasoFactura").classList.remove("oculto");await cargarFacturasInicio();return;
+
+  // Tercero: mostrar selección de factura cuando corresponda.
+  if (
+    esOperadorCobroV19() &&
+    sesion.seleccionFacturaPendienteV18
+  ) {
+    document.getElementById("pantallaPrincipal")
+      .classList.add("oculto");
+
+    document.querySelector(".caja")
+      .classList.remove("oculto");
+
+    document.getElementById("pasoUsuario")
+      .classList.add("oculto");
+
+    document.getElementById("pasoInspector")
+      .classList.add("oculto");
+
+    document.getElementById("pasoFactura")
+      .classList.remove("oculto");
+
+    await cargarFacturasInicio();
+    return;
   }
+
   if (sesion.rol === "Coordinador") {
     mostrarPantallaCoordinador();
     return;
