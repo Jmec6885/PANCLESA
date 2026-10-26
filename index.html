@@ -1,34 +1,36 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<!-- VERSION v18 - ENTREGA HTML COMPLETO
-No publicar aislado. Requiere Codigo.gs v18 y el proximo SesionesPermisos.gs v18.
-Nuevas acciones del enrutador:
-resumenClasificaciones -> obtenerResumenClasificaciones(s.usuario,p.zona,p.fecha)
-clientesClasificacion -> obtenerClientesDeClasificacion(s.usuario,p.zona,p.clasificacion,p.tipo)
-resumenAtrasadosClasificacion -> obtenerResumenAtrasadosClasificacion(s.usuario,p.zona)
-cargarPreciosCSV -> cargarPreciosCSV(s.usuario,p.csv,p.idCarga)
-reservarInspectores -> reservarInspectoresSesion(p.token,p.inspector1,p.inspector2)
-avanceDelDia -> consultarAvancePorRol(s.usuario,p.zona,p.fecha,parejaConfirmadaDelServidor)
-Login al reemplazar sesion debe devolver idParejaSesion e inspectores cuando se conservaron.
-Preparacion: configurarVersion18() en GS; confirmar inspectores con la nueva interfaz;
-activarValidacionInspectoresV18() solo cuando todos los archivos esten publicados y sesiones listas.
-No borrar IndexedDB/localStorage. Pendientes antiguos sin version/pareja pueden requerir revision.
-La copia offline indica su corte; sus cantidades no son un avance actualizado en tiempo real.
-Dia 1: cierre previo; desde dia 2: mes actual, incluyendo pagos del dia 1.
-Al abrir detalle de una tarjeta de cierre se rotula LISTA ACTUAL, no detalle historico.
-CSV activado al confirmar guardado; pendientes nuevos conservan versionTarifa e idParejaSesion.
-Camara/galeria, retiros y medidores v17 conservados. Probar selector en telefonos reales.
-Verificacion local: 18 pruebas de logica/contratos aprobadas con DOM/backend simulados.
-No equivale a prueba en Vercel o Apps Script real.
+<!-- HTML v19 COMPLETO, ENTREGADO EN DOS PARTES CONSECUTIVAS
+Pegar TODO Parte 1 y debajo TODO Parte 2. Guardar el resultado unido como index.html.
+No agregar otra cabecera, otro script ni etiquetas de cierre entre partes.
+Requiere Codigo.gs v19 y SesionesPermisos.gs v19 coordinados. NO publicar con el POST v18.
+Nuevas acciones: consultarDatosCliente, actualizarDatosCliente. desactivarCliente debe recibir zona.
+Facturas en cobranza: facturasDisponibles con paraCobro:true y zona concreta debe devolver
+solo las del usuario autenticado mediante consultarFacturasParaCobro(s.usuario,p.zona).
+reservarInspectores debe aceptar Administrador y pasar p.zona como cuarto argumento.
+Login/verificarSesion deben devolver zonaTrabajo en la metadata, y el reemplazo de sesiones
+conservar la pareja y zona de Cobrador Y Administrador sin liberar el token nuevo.
+Cobranza Admin es un modo explicito; mantiene actor propio y facturas propias asignadas.
+Notificacion no requiere factura, kWh, lectura ni precios. Fotos y observaciones siguen obligatorias.
+Fotos: Total=factura; Parcial=factura+notificacion; Notificacion=notificacion, con/sin medidor.
+Cobrador: nombre/clasificacion; lectura solo al reemplazar medidor por otro numero.
+Contador/Supervisor pueden editar lectura y desactivar; borrar no elimina historial.
+Cambio manual de factura no exige utilizar primero la menor. No se cambian ni borran pendientes.
+Si falla la consulta de disponibilidad, solo se usa un paquete propio de igual usuario/zona/pareja,
+rotulado copia local. Una denegacion de permisos o sesion invalida NO activa esa alternativa.
+Los importes/lecturas ocultos se ignoran al Notificar. No se imputan nuevos consumos no leidos.
+No borrar localStorage/IndexedDB. Pendientes anteriores mantienen sus IDs y versiones originales.
+Al cambiar nombre/clasificacion pueden requerir revision; no se atribuyen automaticamente al nuevo nombre.
+ConfigurarVersion19 en el servidor solo cuando el conjunto este completo, respetando respaldos.
+Pruebas locales: 37 comprobaciones de logica con DOM/backend simulados. Sintaxis Node verificada.
+NO equivale a pruebas en Vercel, Apps Script ni dispositivos reales. Probar camara/galeria en telefonos.
 -->
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>App de Cobros</title>
-<!-- v17 integrada: instalar Codigo.gs y SesionesPermisos.gs y ejecutar configurarSistemaCambios() antes de publicar.
-     Respaldar/sincronizar pendientes. No borrar almacenamiento local. Camara/galeria: probar en telefonos reales. -->
-<!-- VERSION_APP: v18-integrada -->
+<!-- Requiere el conjunto v19 completo; no borrar almacenamiento local. -->
+<!-- VERSION_APP: v19-integrada -->
 <style>
   body {
     font-family: Arial, sans-serif;
@@ -428,6 +430,7 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     <h2>¿Con qué factura inician?</h2>
     <select id="campoFacturaInicial"></select>
     <button onclick="confirmarFacturaInicial()">Continuar</button>
+    <button type="button" onclick="continuarSinFacturaV19()">Continuar solo para notificaciones</button>
     <div class="error" id="errorFactura"></div>
   </div>
 
@@ -439,7 +442,7 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     <span id="textoSesion"></span>
     <button onclick="cerrarSesion()" class="botonCerrarSesion">Cerrar sesión</button>
   </div>
-  <div style="text-align:right; font-size:10px; color:#aaa;">v18-integrada</div>
+  <div style="text-align:right; font-size:10px; color:#aaa;">v19-integrada</div>
   <div class="barraAcciones" id="barraAcciones">
 
   <button
@@ -500,6 +503,8 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     Usuarios
   </button>
 
+<button id="botonModoCobroAdminV19" type="button" class="accionPrincipal oculto" onclick="iniciarCobranzaAdminV19()">Cobrar como Administrador</button>
+<button id="botonSalirCobroAdminV19" type="button" class="accionPrincipal oculto" onclick="salirCobranzaAdminV19()">Volver a administración</button>
 <button id="botonPreciosV18" type="button" class="accionPrincipal oculto" onclick="abrirPreciosV18()">Actualizar precios</button>
 <button id="botonFacturas" class="accionPrincipal oculto" onclick="abrirPantallaFacturas()">Facturas</button>
 <button
@@ -849,15 +854,18 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     >
   </div>
 
-  <label class="etiquetaCampo" for="detTotalCobrar">
+  <div id="bloqueImporteV19"><label class="etiquetaCampo" for="detTotalCobrar">
     Total $ a cobrar
   </label>
   <input
     type="text"
     id="detTotalCobrar"
     disabled
-  >
+  ></div>
 
+  <div id="avisoPreciosV19" class="fila" role="status"></div>
+  <div id="avisoNotificacionV19" class="fila oculto">Notificación sin cobro: no necesitas lectura, kWh ni importe. Se conservan lectura y deuda conocidas. Adjunta la foto de notificación y observaciones.</div>
+  <button type="button" id="botonCambiarFacturaDetalleV19" class="botonActualizar" onclick="cambiarFacturaInicial()">Cambiar factura antes de guardar</button>
   <label class="etiquetaCampo" for="detEstado">
     Estado
   </label>
@@ -895,14 +903,14 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     </div>
   </div>
 
-  <label class="etiquetaCampo" for="detNumeroFactura">
+  <div id="bloqueNumeroFacturaV19"><label class="etiquetaCampo" for="detNumeroFactura">
     N° Factura
   </label>
   <input
     type="text"
     id="detNumeroFactura"
     disabled
-  >
+  ></div>
 
   <label class="etiquetaCampo" for="detObservaciones">
     Observaciones (obligatorio)
@@ -958,6 +966,15 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     <div id="clienteEditorMedidor" class="fila"></div>
     <div id="valoresActualesMedidor" class="fila"></div>
     <p id="avisoEditorMedidor" class="fila"></p>
+    <label class="etiquetaCampo" for="editarNombreV19">Nombre del cliente</label>
+    <input type="text" id="editarNombreV19" maxlength="200">
+    <label class="etiquetaCampo" for="editarClasificacionV19">Clasificación</label>
+    <input type="text" id="editarClasificacionV19" maxlength="200" list="clasificacionesEditorV19">
+    <datalist id="clasificacionesEditorV19"></datalist>
+    <label id="filaReemplazoV19" class="etiquetaCampo">
+      <input type="checkbox" id="reemplazarMedidorV19" onchange="configurarReemplazoV19()" style="width:auto;">
+      Reemplazar el medidor e indicar lectura inicial del nuevo
+    </label>
     <label class="etiquetaCampo" for="editarNumeroMedidor">Número de medidor</label>
     <input type="text" id="editarNumeroMedidor" maxlength="100">
     <label class="etiquetaCampo" for="editarLecturaAnterior" id="etiquetaLecturaEditor">Lectura anterior</label>
@@ -996,6 +1013,9 @@ let clasificacionActualV18=null,atrasadaActualV18=null;
 let resumenMensualV18=null,resumenAtrasadosV18=null,preciosCSVV18=null;
 let operacionPreciosV18=false,reservandoInspectoresV18=false;
 let consultaClasV18=0,consultaAtrasV18=0,detalleClasV18=0,detalleAtrasV18=0;
+
+// V19: no publicar sin Codigo.gs v19 y SesionesPermisos.gs v19.
+let ultimaDisponibilidadV19={origen:"servidor",detalle:""};
 let sesion = {
   usuario: null,
   rol: null,
@@ -1233,6 +1253,8 @@ async function intentarLogin() {
     sesion.inspector2 = null;
     sesion.facturaActual = null;
     sesion.idParejaSesion=null;sesion.seleccionFacturaPendienteV18=false;
+    sesion.modoCobroV19=false;sesion.zonaTrabajo=String(resultado.zonaTrabajo||"").trim();
+
     if(resultado.idParejaSesion && Array.isArray(resultado.inspectores) && resultado.inspectores.length===2) {
       sesion.idParejaSesion=resultado.idParejaSesion;sesion.inspector1=resultado.inspectores[0];sesion.inspector2=resultado.inspectores[1];
     }
@@ -1319,10 +1341,12 @@ async function confirmarInspector() {
   const identidad=sesion.token,boton=document.querySelector('#pasoInspector button');
   reservandoInspectoresV18=true;boton.disabled=true;boton.textContent="Validando inspectores...";
   try {
-    const r=await llamarBackend("reservarInspectores",{inspector1:a,inspector2:b});
+    const r=await llamarBackend("reservarInspectores",{inspector1:a,inspector2:b,zona:zonaTrabajoCobroV19()});
     if(sesion.token!==identidad)throw new Error("La sesión cambió.");
     if(!r?.exito||!r.idParejaSesion||!Array.isArray(r.inspectores)||r.inspectores.length!==2)throw new Error(r?.mensaje||"No se confirmó la reserva de inspectores.");
     sesion.inspector1=r.inspectores[0];sesion.inspector2=r.inspectores[1];sesion.idParejaSesion=r.idParejaSesion;
+    sesion.zonaTrabajo=r.zonaTrabajo||zonaTrabajoCobroV19();
+    if(sesion.rol==="Administrador")sesion.zona=sesion.zonaTrabajo;
     sesion.seleccionFacturaPendienteV18=true;localStorage.setItem("sesionApp",JSON.stringify(sesion));
     document.getElementById("pasoInspector").classList.add("oculto");document.getElementById("pasoFactura").classList.remove("oculto");
     await cargarFacturasInicio();
@@ -1351,34 +1375,15 @@ function describirDisponibles(lista) {
   return partes.slice(0, 8).join(", ") + (partes.length > 8 ? "…" : "");
 }
 
-async function cargarFacturasInicio() {
-  const select = document.getElementById("campoFacturaInicial");
-  const info = document.getElementById("errorFactura");
-
-  select.innerHTML = "";
-  info.textContent = "Cargando facturas disponibles...";
-
-  try {
-    const r = await llamarBackend("facturasDisponibles", {});
-
-    if (!r.exito) throw new Error(r.mensaje || "No se pudieron cargar las facturas.");
-
-    if (r.disponibles.length === 0) {
-      info.textContent = "El contador aún no asignó facturas disponibles para tu zona.";
-      return;
-    }
-
-    r.disponibles.slice(0, 500).forEach(n => {
-      const opcion = document.createElement("option");
-      opcion.value = String(n);
-      opcion.textContent = String(n);
-      select.appendChild(opcion);
-    });
-
-    info.textContent = "Disponibles: " + describirDisponibles(r.disponibles);
-  } catch (err) {
-    info.textContent = "Sin conexión, no se pudieron cargar las facturas. Intenta con señal.";
-  }
+async function cargarFacturasInicio(){
+  const select=document.getElementById("campoFacturaInicial"),info=document.getElementById("errorFactura");select.replaceChildren();info.textContent="Consultando tus facturas...";
+  try{
+    const disponibles=await obtenerFacturasDisponiblesSeguras();
+    disponibles.forEach(n=>{const op=document.createElement("option");op.value=String(n);op.textContent=String(n);select.appendChild(op);});
+    if(sesion.facturaActual&&disponibles.includes(Number(sesion.facturaActual)))select.value=sesion.facturaActual;
+    info.textContent=disponibles.length?"Disponibles: "+describirDisponibles(disponibles)+" · "+ultimaDisponibilidadV19.origen:
+      "Sin facturas elegibles. Puedes continuar solo para notificaciones; para cobrar deben asignarte facturas.";
+  }catch(e){info.textContent=(e.message||"No se pudo consultar")+". Una notificación no requiere factura.";}
 }
 
 function confirmarFacturaInicial() {
@@ -1446,86 +1451,31 @@ async function obtenerFacturasRegistradasLocalmente(usuario, zona) {
   });
 }
 
-async function obtenerFacturasDisponiblesSeguras() {
-  const usuario = sesion.usuario;
-  const zona = sesion.zona;
-  const token = sesion.token;
-
-  if (sesion.rol !== "Cobrador" || !usuario || !zona) {
-    throw new Error("No se identificó la sesión del Cobrador.");
-  }
-
-  let numeros;
-  let paquete = obtenerPaqueteOffline();
-
-  const paquetePropio =
-    paquete &&
-    paquete.usuario === usuario &&
-    paquete.zona === zona;
-
-  if (navigator.onLine) {
-    const respuesta = await llamarBackend(
-      "facturasDisponibles",
-      {}
-    );
-
-    if (
-      !respuesta ||
-      !respuesta.exito ||
-      !Array.isArray(respuesta.disponibles)
-    ) {
-      throw new Error(
-        respuesta?.mensaje ||
-        "No se pudieron comprobar las facturas en el servidor."
-      );
+async function obtenerFacturasDisponiblesSeguras(){
+  const usuario=sesion.usuario,zona=zonaTrabajoCobroV19(),token=sesion.token;
+  if(!esOperadorCobroV19()||!usuario||!zona)throw new Error("Activa una sesión de cobranza con zona concreta.");
+  const paquete=obtenerPaqueteOffline(),propio=paquete&&paquete.usuario===usuario&&paquete.zona===zona&&
+    paquete.idParejaSesion===sesion.idParejaSesion;
+  let numeros,origen="servidor",detalle="";
+  if(navigator.onLine){
+    try{
+      const r=await llamarBackend("facturasDisponibles",{zona,paraCobro:true});
+      if(!r?.exito||!Array.isArray(r.disponibles))throw new Error(r?.mensaje||"No se pudo comprobar la disponibilidad de facturas.");
+      numeros=r.disponibles;
+    }catch(e){
+      const transporte=e?.name==="AbortError"||e?.name==="TypeError"||/failed to fetch|networkerror|network request failed|load failed/i.test(String(e?.message||""));
+      if(!transporte||sesionBloqueada||!propio||!Array.isArray(paquete.facturas))throw e;
+      numeros=paquete.facturas;origen="copia local";detalle="Falló la consulta. Se usa el talonario preparado; no se confirma el estado actual del servidor.";
     }
-
-    numeros = respuesta.disponibles;
-  } else {
-    if (!paquetePropio) {
-      throw new Error(
-        "No tienes un talonario preparado para este usuario y zona."
-      );
-    }
-
-    numeros = paquete.facturas;
+  }else{
+    if(!propio||!Array.isArray(paquete.facturas))throw new Error("No tienes un talonario preparado para este usuario, zona y pareja.");
+    numeros=paquete.facturas;origen="copia local";detalle="Sin conexión: se usa el talonario descargado.";
   }
-
-  const locales = await obtenerFacturasRegistradasLocalmente(
-    usuario,
-    zona
-  );
-
-  if (
-    sesion.usuario !== usuario ||
-    sesion.zona !== zona ||
-    sesion.token !== token
-  ) {
-    throw new Error("La sesión cambió durante la consulta.");
-  }
-
-  const disponibles = [...new Set(numeros.map(Number))]
-    .filter(n =>
-      Number.isSafeInteger(n) &&
-      n > 0 &&
-      !locales.has(n)
-    )
-    .sort((a, b) => a - b);
-
-  // Solo actualiza el paquete si ya estaba preparado
-  // para el mismo usuario y zona.
-  if (navigator.onLine && paquetePropio) {
-    paquete.facturas = disponibles.map(String);
-    paquete.facturasActualizadasEn = new Date().toISOString();
-
-    localStorage.setItem(
-      CLAVE_PAQUETE_OFFLINE,
-      JSON.stringify(paquete)
-    );
-
-    actualizarEstadoOffline();
-  }
-
+  const locales=await obtenerFacturasRegistradasLocalmente(usuario,zona);
+  if(sesion.usuario!==usuario||zonaTrabajoCobroV19()!==zona||sesion.token!==token)throw new Error("La sesión cambió durante la consulta.");
+  const disponibles=[...new Set(numeros.map(Number))].filter(n=>Number.isSafeInteger(n)&&n>0&&!locales.has(n)).sort((a,b)=>a-b);
+  ultimaDisponibilidadV19={origen,detalle};
+  if(origen==="servidor"&&propio){paquete.facturas=disponibles.map(String);paquete.facturasActualizadasEn=new Date().toISOString();localStorage.setItem(CLAVE_PAQUETE_OFFLINE,JSON.stringify(paquete));actualizarEstadoOffline();}
   return disponibles;
 }
 
@@ -1533,7 +1483,7 @@ async function asegurarFacturaActual() {
   if (
     actualizandoFactura ||
     guardandoCobroLocal ||
-    sesion.rol !== "Cobrador"
+    !esOperadorCobroV19()
   ) {
     return;
   }
@@ -1581,67 +1531,24 @@ async function asegurarFacturaActual() {
   }
 }
 
-async function cambiarFacturaInicial() {
-  if (
-    guardandoCobroLocal ||
-    sincronizacionEnCurso ||
-    actualizandoFactura
-  ) {
-    alert("Espera a que termine la operación actual.");
-    return;
-  }
-
-  actualizandoFactura = true;
-
-  try {
-    const disponibles = await obtenerFacturasDisponiblesSeguras();
-
-    if (!disponibles.length) {
-      alert(
-        navigator.onLine
-          ? "No hay facturas disponibles para tu usuario."
-          : "No quedan facturas disponibles en el paquete offline."
-      );
-      return;
-    }
-
-    const nuevo = prompt(
-      "Facturas disponibles: " +
-      describirDisponibles(disponibles) +
-      "\n\nEscribe la siguiente factura de tu talonario físico:",
-      sesion.facturaActual || String(disponibles[0])
-    );
-
-    if (!nuevo || !nuevo.trim()) return;
-
-    const numero = Number(nuevo.trim());
-
-    if (
-      !Number.isSafeInteger(numero) ||
-      !disponibles.includes(numero)
-    ) {
-      alert(
-        "Esa factura no está disponible o ya está registrada localmente."
-      );
-      return;
-    }
-
-    sesion.facturaActual = String(numero);
-
-    localStorage.setItem(
-      "sesionApp",
-      JSON.stringify(sesion)
-    );
-
-    actualizarTextoFactura();
-  } catch (error) {
-    alert(
-      "No se pudo seleccionar la factura: " +
-      (error.message || "Error desconocido.")
-    );
-  } finally {
-    actualizandoFactura = false;
-  }
+async function cambiarFacturaInicial(){
+  if(!esOperadorCobroV19()||sesionBloqueada)return;
+  if(guardandoCobroLocal||actualizandoFactura){alert("Espera a que termine el guardado local o la selección actual.");return;}
+  actualizandoFactura=true;
+  try{
+    const disponibles=await obtenerFacturasDisponiblesSeguras();
+    if(!disponibles.length){alert("No hay facturas elegibles en la fuente consultada. No se puede reutilizar una factura registrada localmente.");return;}
+    const texto=prompt("Elige cualquier factura disponible; no es obligatorio utilizar primero la menor.\nDisponibles: "+describirDisponibles(disponibles)+
+      "\nFuente: "+ultimaDisponibilidadV19.origen+"\n"+ultimaDisponibilidadV19.detalle+"\n\nNo cambies el número de un cobro ya emitido o guardado. Factura a utilizar:",sesion.facturaActual||String(disponibles[0]));
+    if(texto===null||!texto.trim())return;const numero=Number(texto.trim());
+    if(!Number.isSafeInteger(numero)||!disponibles.includes(numero)){alert("La factura elegida no está en tus disponibles o ya está reservada en el teléfono.");return;}
+    const detalle=!document.getElementById("pantallaDetalle").classList.contains("oculto");
+    if(detalle&&String(numero)!==String(sesion.facturaActual)&&!confirm("¿Cambiar a la factura "+numero+" para este formulario aún NO registrado?\nNo se cambiará ningún pendiente anterior. Debes adjuntar la foto de la factura seleccionada."))return;
+    const cambio=String(numero)!==String(sesion.facturaActual);
+    sesion.facturaActual=String(numero);localStorage.setItem("sesionApp",JSON.stringify(sesion));
+    if(detalle){document.getElementById("detNumeroFactura").value=String(numero);if(cambio){document.getElementById("detFotoFactura").value="";mostrarFotoElegida("detFotoFactura");}}
+    actualizarTextoFactura();alert("Factura seleccionada: "+numero+". No se modificaron ni eliminaron registros de otras facturas.");
+  }catch(e){alert("No se cambió la factura: "+(e.message||"Error de consulta."));}finally{actualizandoFactura=false;}
 }
 
 
@@ -1657,10 +1564,8 @@ function incrementarFactura(numeroStr) {
 
 
 
-function actualizarTextoFactura() {
-  const el = document.getElementById("textoFacturaActual");
-  if (el) el.textContent = "Próxima factura: " + (sesion.facturaActual || "-");
-}
+function actualizarTextoFactura(){const el=document.getElementById("textoFacturaActual");if(el)el.textContent="Próxima factura: "+(sesion.facturaActual||"—")+
+  (ultimaDisponibilidadV19.origen==="copia local"?" · copia local":"");}
 
 function guardarSesionYContinuar() {
   // Guardamos la sesión en el navegador para que funcione offline
@@ -1669,7 +1574,7 @@ function guardarSesionYContinuar() {
 }
 
 async function mostrarPantallaPrincipal() {
-  if (sesion.rol === "Cobrador" && !sesion.idParejaSesion) {
+  if (esOperadorCobroV19() && !sesion.idParejaSesion) {
     if (!navigator.onLine) { alert("Esta sesión debe confirmar sus inspectores en línea con la versión v18. Los cobros locales existentes se conservan."); return; }
     try {
       document.getElementById("pantallaPrincipal").classList.add("oculto");
@@ -1684,7 +1589,7 @@ async function mostrarPantallaPrincipal() {
     } catch(e) { alert(e.message || "No se pudieron consultar inspectores."); }
     return;
   }
-  if (sesion.rol === "Cobrador" && sesion.seleccionFacturaPendienteV18) {
+  if (esOperadorCobroV19() && sesion.seleccionFacturaPendienteV18) {
     document.querySelector(".caja").classList.remove("oculto");
     document.getElementById("pasoUsuario").classList.add("oculto");document.getElementById("pasoInspector").classList.add("oculto");
     document.getElementById("pasoFactura").classList.remove("oculto");await cargarFacturasInicio();return;
@@ -1705,10 +1610,15 @@ async function mostrarPantallaPrincipal() {
     .classList
     .remove("oculto");
 
-  const esCobrador = sesion.rol === "Cobrador";
+  const esCobrador = esOperadorCobroV19();
   const esContador = sesion.rol === "Contador";
   const esSupervisor = sesion.rol === "Supervisor";
   const esAdministrador = sesion.rol === "Administrador";
+  document.getElementById("botonModoCobroAdminV19").classList.toggle("oculto",!esAdministrador || esOperadorCobroV19());
+  document.getElementById("botonSalirCobroAdminV19").classList.toggle("oculto",!esAdministrador || !esOperadorCobroV19());
+  document.getElementById("zonaConsultaGeneral").disabled=esAdministrador && esOperadorCobroV19();
+  if(esAdministrador && esOperadorCobroV19())document.getElementById("zonaConsultaGeneral").value=sesion.zonaTrabajo;
+
   document.getElementById("bloqueZonaConsulta").classList.toggle("oculto", !esAdministrador);
   document.getElementById("botonPreciosV18").classList.toggle("oculto", !(esContador || esAdministrador));
 
@@ -1952,6 +1862,7 @@ async function crearPendienteDesdeFormulario(
     codigo: datos.codigo,
     nombreCliente: datos.nombreCliente || "",
     baseMedidor: datos.baseMedidor,
+    identidadCliente: datos.identidadCliente,
     numeroFactura: String(datos.numeroFactura || ""),
     estadoCobro: datos.estado,
     observaciones: datos.observaciones,
@@ -1981,7 +1892,7 @@ async function actualizarContadorPendientesOffline() {
     "botonPendientesOffline"
   );
 
-  if (!boton || sesion.rol !== "Cobrador") return;
+  if (!boton || !esOperadorCobroV19()) return;
 
   try {
     const pendientes = await obtenerPendientesOffline();
@@ -1996,7 +1907,7 @@ async function actualizarContadorPendientesOffline() {
 }
 
 async function abrirPendientesOffline() {
-  if (sesion.rol !== "Cobrador") {
+  if (!esOperadorCobroV19()) {
     alert("Solo el Cobrador puede consultar pendientes.");
     return;
   }
@@ -2134,7 +2045,7 @@ function actualizarEstadoOffline() {
 
   if (!estado) return;
 
-  if (sesion.rol !== "Cobrador") {
+  if (!esOperadorCobroV19()) {
     estado.classList.add("oculto");
     estado.textContent = "";
     return;
@@ -2168,7 +2079,7 @@ async function prepararTrabajoOffline() {
   const boton = document.getElementById("botonPrepararOffline");
   const estado = document.getElementById("estadoOffline");
 
-  if (sesion.rol !== "Cobrador") {
+  if (!esOperadorCobroV19()) {
     alert("Solo el Cobrador puede preparar trabajo sin conexión.");
     return;
   }
@@ -2205,7 +2116,7 @@ async function prepararTrabajoOffline() {
     const [clientes, precios, respuestaFacturas] = await Promise.all([
       llamarBackend("clientesParaCobro", { zona: sesion.zona }),
       llamarBackend("precios", {}),
-      llamarBackend("facturasDisponibles", {})
+      llamarBackend("facturasDisponibles", {zona:zonaTrabajoCobroV19(),paraCobro:true})
     ]);
 
     if (!Array.isArray(clientes)) {
@@ -2952,6 +2863,11 @@ async function cargarClientesNoLiberados() {
 
 
 
+// FIN PARTE 1: pegar PARTE 2 justo debajo. No cerrar script aqui.
+
+
+
+// INICIO PARTE 2: continuacion directa de PARTE 1.
 async function cargarClientesParaCobro() { return cargarResumenClasV18(); }
 
 let clientesCargados = [];
@@ -2977,7 +2893,7 @@ function pintarListaClientes(clientes) {
   filtrarClientes();
 }
 
-async function desactivarClienteDesdeTarjeta(codigo, tarjeta) {
+async function desactivarClienteDesdeTarjeta(codigo, tarjeta, zonaCliente) {
   if (!["Contador", "Supervisor", "Administrador"].includes(sesion.rol)) {
     alert("Tu rol no tiene permiso para desactivar clientes.");
     return;
@@ -2993,6 +2909,7 @@ async function desactivarClienteDesdeTarjeta(codigo, tarjeta) {
   try {
     const resultado = await llamarBackend("desactivarCliente", {
       codigo: codigo,
+      zona: zonaCliente || sesion.zona,
       usuario: sesion.usuario
     });
 
@@ -3117,12 +3034,12 @@ enlaceFoto(
       boton.style.background = "#c00000";
       boton.addEventListener("click", e => {
         e.stopPropagation();
-        desactivarClienteDesdeTarjeta(cliente["CODIGO"], tarjeta);
+        desactivarClienteDesdeTarjeta(cliente["CODIGO"], tarjeta, cliente["Zona"]);
       });
       tarjeta.appendChild(boton);
     }
-    if (["Supervisor","Contador","Administrador"].includes(sesion.rol)) {
-      const editar=document.createElement("button"); editar.type="button";editar.textContent="Editar medidor / lectura";
+    if (["Cobrador","Supervisor","Contador","Administrador"].includes(sesion.rol)) {
+      const editar=document.createElement("button"); editar.type="button";editar.textContent="Editar datos del cliente";
       editar.addEventListener("click",e=>{e.stopPropagation();abrirEditorMedidor(cliente);});tarjeta.appendChild(editar);
     }
     tarjeta.addEventListener("click", () => abrirDetalleCliente(cliente));
@@ -3158,10 +3075,10 @@ function buscarMontoPorConsumo(consumoTotal) {
 }
 
 async function abrirDetalleCliente(cliente, verificado = false) {
-  if (sesion.rol === "Cobrador" && String(cliente.Liberado || "").trim().toUpperCase() !== "SI") {
+  if (esOperadorCobroV19() && String(cliente.Liberado || "").trim().toUpperCase() !== "SI") {
     alert("Este cliente no está liberado para un nuevo cobro. Su estado ya fue gestionado o requiere liberación."); return;
   }
-if (sesion.rol !== "Cobrador") {
+if (!esOperadorCobroV19()) {
   await abrirEditorMedidor(cliente);
   return;
 }
@@ -3178,16 +3095,19 @@ if (guardandoCobroLocal || sincronizacionEnCurso) {
       aplicarClienteActualizadoLocal(cliente);
     } catch(e) { alert(e.message || "No se pudo consultar el cliente."); return; }
   }
+  if(sesion.rol==="Administrador" && String(cliente.Zona||"").trim()!==zonaTrabajoCobroV19()) {
+    alert("El cliente no pertenece a la zona de cobranza activa. Vuelve a administración para seleccionar otra zona.");return;
+  }
   clienteActual = cliente;
 document.getElementById("detFotoFactura").value = "";
 document.getElementById("detFotoNotificacion").value = "";
 mostrarFotoElegida("detFotoFactura");
 mostrarFotoElegida("detFotoNotificacion");
+  let falloPreciosV19="";
   try { await obtenerListaPrecios(); }
-  catch(e) {
-    alert(e.message || "No se pudieron verificar los precios. Los pendientes guardados se conservan.");
-    document.getElementById("pantallaDetalle").classList.add("oculto");document.getElementById("pantallaPrincipal").classList.remove("oculto");return;
-  }
+  catch(e) { listaPrecios=[];falloPreciosV19=e.message||"No se pudieron consultar precios"; }
+  document.getElementById("avisoPreciosV19").textContent=falloPreciosV19?
+    "Precios no disponibles: "+falloPreciosV19+". Puedes dejar Notificación; para cobrar necesitas una tarifa válida.":"";
 
   document.getElementById("pantallaPrincipal").classList.add("oculto");
   document.getElementById("pantallaDetalle").classList.remove("oculto");
@@ -3227,6 +3147,7 @@ mostrarFotoElegida("detFotoNotificacion");
 }
 
 function calcularConsumo() {
+  if(document.getElementById("detEstado").value==="Notificacion")return;
   const lecturaAnterior = Number(clienteActual["Lectura Anterior"]) || 0;
   const lecturaActual = Number(document.getElementById("detLecturaActual").value) || 0;
   const pteAnterior = Number(clienteActual["Pte/KWH Meses Anteri."]) || 0;
@@ -3248,6 +3169,7 @@ function calcularConsumo() {
 }
 
 function validarLecturaActual() {
+  if(document.getElementById("detEstado").value==="Notificacion")return;
   const lecturaAnterior = Number(clienteActual["Lectura Anterior"]) || 0;
   const campo = document.getElementById("detLecturaActual");
   const lecturaActual = Number(campo.value) || 0;
@@ -3260,6 +3182,7 @@ function validarLecturaActual() {
 }
 
 function calcularTotalSinMedidor() {
+  if(document.getElementById("detEstado").value==="Notificacion")return;
   const campo = document.getElementById("detMontoFijo");
   const total = document.getElementById("detTotalCobrar");
   const texto = campo.value.trim();
@@ -3281,6 +3204,7 @@ function calcularTotalSinMedidor() {
 }
 
 function actualizarKwPendienteParcial() {
+  if(document.getElementById("detEstado").value==="Notificacion")return;
   const consumoTotal = Number(document.getElementById("detConsumoTotal")?.textContent) || 0;
   const montoFijo = Number(document.getElementById("detMontoFijo")?.value) || 0;
   const base = clienteActual["Medidor"] ? consumoTotal : montoFijo;
@@ -3294,13 +3218,20 @@ function actualizarKwPendienteParcial() {
 }
 
 function actualizarCamposPorEstado() {
-  const estado = document.getElementById("detEstado").value;
-
-  document.getElementById("bloqueParcial").classList.toggle("oculto", estado !== "Cobro Parcial");
-  document.getElementById("bloqueFotoFactura").classList.toggle("oculto", estado !== "Cobro Total" && estado !== "Cobro Parcial");
-  document.getElementById("bloqueFotoNotificacion").classList.toggle("oculto", estado !== "Cobro Parcial" && estado !== "Notificacion");
-
-  document.getElementById("detKwCobrado").oninput = actualizarKwPendienteParcial;
+  const estado=document.getElementById("detEstado").value,notifica=estado==="Notificacion";
+  const tieneMedidor=!!clienteActual?.Medidor;
+  document.getElementById("botonCambiarFacturaDetalleV19").classList.toggle("oculto",notifica);
+  document.getElementById("bloqueMedidor").classList.toggle("oculto",notifica||!tieneMedidor);
+  document.getElementById("bloqueSinMedidor").classList.toggle("oculto",notifica||tieneMedidor);
+  document.getElementById("bloqueImporteV19").classList.toggle("oculto",notifica);
+  document.getElementById("bloqueNumeroFacturaV19").classList.toggle("oculto",notifica);
+  document.getElementById("avisoNotificacionV19").classList.toggle("oculto",!notifica);
+  document.getElementById("bloqueParcial").classList.toggle("oculto",estado!=="Cobro Parcial");
+  document.getElementById("bloqueFotoFactura").classList.toggle("oculto",!["Cobro Total","Cobro Parcial"].includes(estado));
+  document.getElementById("bloqueFotoNotificacion").classList.toggle("oculto",!["Cobro Parcial","Notificacion"].includes(estado));
+  for(const id of ["detLecturaActual","detMontoFijo","detKwCobrado"])document.getElementById(id).disabled=notifica;
+  document.getElementById("detNumeroFactura").value=notifica?"":(sesion.facturaActual||"Sin factura seleccionada");
+  document.getElementById("detKwCobrado").oninput=actualizarKwPendienteParcial;
 }
 
 function cerrarDetalle() {
@@ -3460,6 +3391,8 @@ function datosDesdePendiente(p) {
     inspector1: p.inspector1,
     inspector2: p.inspector2,
     codigo: p.codigo,
+    zonaCaptura: p.zona,
+    identidadCliente: p.identidadCliente,
     baseMedidor: p.baseMedidor,
     estado: p.estadoCobro,
     observaciones: p.observaciones,
@@ -3650,7 +3583,7 @@ async function sincronizarPendientesOffline() {
   if (
     sincronizacionEnCurso ||
     guardandoCobroLocal ||
-    sesion.rol !== "Cobrador" ||
+    !esOperadorCobroV19() ||
     !sesion.usuario ||
     !sesion.zona ||
     !sesion.token
@@ -3742,8 +3675,8 @@ if (guardandoCobroLocal || sincronizacionEnCurso) {
 }
   errorDiv.textContent = "";
 
-  if (sesion.rol !== "Cobrador") {
-    errorDiv.textContent = "Solo el Cobrador puede registrar cobros.";
+  if (!esOperadorCobroV19()) {
+    errorDiv.textContent = "Activa el modo de cobranza para registrar esta operación.";
     return;
   }
 
@@ -3836,8 +3769,12 @@ const fechaCaptura = new Date().toISOString();
     }
 
     if(!sesion.idParejaSesion)throw new Error("Confirma inspectores en el servidor antes de capturar.");
-    const tarifaV18 = listaPrecios[0]?.versionTarifa;
-    if(!tarifaV18)throw new Error("La tarifa no tiene versión. Descarga precios v18 antes de capturar.");
+    let tarifaV18="NO_APLICA";
+    if(usaFactura){
+      if(!listaPrecios[0]?.versionTarifa)await obtenerListaPrecios();
+      tarifaV18=listaPrecios[0]?.versionTarifa;
+      if(!tarifaV18)throw new Error("Descarga una tarifa versionada antes de cobrar.");
+    }
     const datos = {
       idCobro: generarIdCobroOffline(),
       versionTarifa: tarifaV18,
@@ -3848,6 +3785,7 @@ fechaCaptura,
 zonaCaptura: zona,
 nombreCliente: cliente["Nombre Cliente"] || "",
 baseMedidor: baseMedidorLocal(cliente),
+identidadCliente: {nombre:String(cliente["Nombre Cliente"]||"").trim(),clasificacion:String(cliente.Clasificacion||"").trim()},
 inspector1,
 inspector2,
       observaciones,
@@ -3862,57 +3800,11 @@ inspector2,
         : null
     };
 
-    if (cliente["Medidor"]) {
-      const textoLectura = document.getElementById("detLecturaActual").value;
-      const lectura = Number(textoLectura);
-      const anterior = Number(cliente["Lectura Anterior"] || 0);
-
-      if (!textoLectura.trim() || !Number.isFinite(lectura) || lectura < anterior) {
-        throw new Error("Ingresa una lectura válida, no menor a la anterior.");
-      }
-
-      datos.lecturaActual = textoLectura;
-    } else {
-      const textoMonto = document.getElementById("detMontoFijo").value;
-      const monto = Number(textoMonto);
-
-     if (
-  !Number.isFinite(monto) ||
-  monto < 0 ||
-  (usaFactura && (!textoMonto.trim() || monto <= 0))
-) {
-  throw new Error("Ingresa una cantidad válida de kWh.");
-}
-
-if (monto > 0 && buscarMontoPorConsumo(monto) === null) {
-  throw new Error(
-    "No existe precio configurado para " + monto + " kWh."
-  );
-}
-
-datos.montoFijo = textoMonto;
-datos.kwManual = textoMonto;
-    }
-
-    if (estado === "Cobro Parcial") {
-      const textoKw = document.getElementById("detKwCobrado").value;
-      const kw = Number(textoKw);
-
-      const base = cliente["Medidor"]
-        ? Number(datos.lecturaActual) -
-          Number(cliente["Lectura Anterior"] || 0) +
-          Number(cliente["Pte/KWH Meses Anteri."] || 0)
-        : Number(datos.montoFijo);
-
-      if (!Number.isFinite(kw) || kw <= 0 || kw > base) {
-        throw new Error("El cobro parcial debe ser mayor que cero y no superar el total.");
-      }
-
-      datos.kwCobrado = textoKw;
-    } else if (estado === "Notificacion") {
-      datos.kwCobrado = 0;
-    }
-
+    Object.assign(datos,datosConsumoV19(cliente,estado,{
+      lecturaActual:document.getElementById("detLecturaActual").value,
+      kwManual:document.getElementById("detMontoFijo").value,
+      kwCobrado:document.getElementById("detKwCobrado").value
+    }));
     const ubicacion = await obtenerUbicacionActual();
 
     if (ubicacion.disponible) {
@@ -4895,102 +4787,44 @@ function aplicarClienteActualizadoLocal(cliente) {
       localStorage.setItem(CLAVE_PAQUETE_OFFLINE,JSON.stringify(paquete));
     }
   }catch(e){console.error("Cambio confirmado; falló actualizar la copia local",e);}
+  if(clasificacionActualV18)clientesCargados=clientesCargados.filter(c=>String(c.Zona||"").trim()===clasificacionActualV18.zona&&String(c.Clasificacion||"Sin clasificación").trim()===clasificacionActualV18.clasificacion);
   filtrarClientes();atrasadosCargados=false;
 }
-async function abrirEditorMedidor(cliente) {
+async function abrirEditorMedidor(cliente){
   if(!cliente||sesionBloqueada||gestionMedidorEnCurso||gestionFacturasEnCurso||guardandoCobroLocal||sincronizacionEnCurso)return;
   if(!["Cobrador","Supervisor","Contador","Administrador"].includes(sesion.rol))return;
-  if(!navigator.onLine){alert("Editar o reemplazar el medidor requiere conexión.");return;}
+  if(!navigator.onLine){alert("Corregir datos requiere conexión. No se borrarán cobros locales.");return;}
   const detalle=!document.getElementById("pantallaDetalle").classList.contains("oculto");
-  if(detalle&&!confirm("Al confirmar el cambio se reiniciará el formulario de cobro abierto. Los datos sin guardar se perderán. ¿Continuar?"))return;
-  gestionMedidorEnCurso=true;
-  const identidad={usuario:sesion.usuario,token:sesion.token};
-  try {
-    if(sesion.rol==="Cobrador") {
+  if(detalle&&!confirm("Al guardar una corrección se reiniciará este formulario de cobro. Los datos sin guardar se perderán. ¿Continuar?"))return;
+  const identidad={usuario:sesion.usuario,token:sesion.token};gestionMedidorEnCurso=true;
+  try{
+    const ref=referenciaClienteV19(cliente);
+    if(esOperadorCobroV19()){
       const pendientes=await obtenerPendientesOffline();
-      if(pendientes.some(p=>String(p.codigo)===String(cliente["CODIGO"])))throw new Error("Este cliente tiene un cobro pendiente en este teléfono. Sincronízalo o resuelve su revisión antes de reemplazar el medidor.");
+      if(pendientes.some(p=>String(p.codigo)===ref.codigo&&p.zona===ref.zona))throw new Error("Hay un cobro local pendiente de este cliente. Sincroniza o resuelve su revisión antes de corregir sus datos.");
     }
-    const codigoCliente = String(
-  cliente?.["CODIGO"] ?? ""
-).trim();
-
-const zonaDelCliente = String(
-  cliente?.["Zona"] ?? ""
-).trim();
-
-const zonaDelUsuario = String(
-  sesion.zona ?? ""
-).trim();
-
-// Administrador necesita la zona del cliente seleccionado.
-// Los demás roles consultan su zona asignada.
-const zonaConsulta = sesion.rol === "Administrador"
-  ? zonaDelCliente
-  : zonaDelUsuario;
-
-console.log("MEDIDOR: solicitud", {
-  accion: "consultarClienteMedidor",
-  rol: sesion.rol,
-  codigo: codigoCliente,
-  zonaDelCliente: zonaDelCliente,
-  zonaDelUsuario: zonaDelUsuario,
-  zonaEnviada: zonaConsulta,
-  camposCliente: Object.keys(cliente || {})
-});
-
-if (!codigoCliente) {
-  throw new Error(
-    "La tarjeta seleccionada no contiene el campo CODIGO del cliente."
-  );
-}
-
-if (!zonaConsulta) {
-  throw new Error(
-    sesion.rol === "Administrador"
-      ? "La tarjeta seleccionada no contiene la Zona del cliente."
-      : "La sesión no contiene la zona asignada al usuario."
-  );
-}
-
-if (
-  sesion.rol !== "Administrador" &&
-  zonaDelCliente &&
-  zonaDelCliente !== zonaDelUsuario
-) {
-  throw new Error(
-    "El cliente seleccionado pertenece a otra zona."
-  );
-}
-
-const r = await llamarBackend("consultarClienteMedidor", {
-  codigo: codigoCliente,
-  zona: zonaConsulta
-});
-
-console.log("MEDIDOR: respuesta", {
-  exito: r?.exito,
-  mensaje: r?.mensaje,
-  tieneCliente: !!r?.cliente,
-  tieneBaseMedidor: !!r?.baseMedidor
-});
-    if(!r?.exito||!r.cliente)throw new Error(r?.mensaje||"No se pudo consultar el cliente.");
-    if(sesion.usuario!==identidad.usuario||sesion.token!==identidad.token)throw new Error("La sesión cambió.");
-    const cobrador=sesion.rol==="Cobrador";
-    if(cobrador&&!r.baseMedidor.medidor)throw new Error("El Cobrador solo reemplaza medidores existentes. La instalación inicial la registra un rol administrativo.");
+    const r=await llamarBackend("consultarDatosCliente",ref);
+    if(!r?.exito||!r.cliente||!r.baseMedidor||!r.revision)throw new Error(r?.mensaje||"Consulta de cliente incompleta.");
+    if(sesion.token!==identidad.token||sesion.usuario!==identidad.usuario)throw new Error("La sesión cambió.");
     contextoEditorMedidor={cliente:r.cliente,revision:r.revision,identidad,regresarA:detalle?"pantallaDetalle":"pantallaPrincipal"};
-    document.getElementById("tituloEditorMedidor").textContent=cobrador?"Reemplazar medidor":"Editar medidor y lectura anterior";
-    document.getElementById("clienteEditorMedidor").textContent=r.cliente["CODIGO"]+" · "+r.cliente["Nombre Cliente"]+" · "+r.cliente["Zona"];
-    document.getElementById("valoresActualesMedidor").textContent="Medidor actual: "+(r.baseMedidor.medidor||"Sin medidor")+" · Lectura anterior: "+r.baseMedidor.lecturaAnterior;
-    document.getElementById("avisoEditorMedidor").textContent=(cobrador?
-      "Indica un medidor distinto y su lectura inicial (0 u otra lectura real). No puedes corregir solo la lectura del medidor actual. ":
-      "Puedes corregir el número y/o la lectura anterior. ")+"Los pendientes se conservan. No se calcula automáticamente el consumo no registrado del medidor retirado; revísalo antes de confirmar.";
-    document.getElementById("editarNumeroMedidor").value=cobrador?"":r.baseMedidor.medidor;
-    document.getElementById("editarLecturaAnterior").value=cobrador?"0":String(r.baseMedidor.lecturaAnterior);
-    document.getElementById("etiquetaLecturaEditor").textContent=cobrador?"Lectura inicial del nuevo medidor":"Lectura anterior";
+    document.getElementById("tituloEditorMedidor").textContent="Editar datos del cliente";
+    document.getElementById("clienteEditorMedidor").textContent=ref.codigo+" · "+r.cliente["Nombre Cliente"]+" · "+ref.zona;
+    document.getElementById("valoresActualesMedidor").textContent="Medidor: "+(r.baseMedidor.medidor||"Sin medidor")+" · Lectura anterior: "+r.baseMedidor.lecturaAnterior;
+    document.getElementById("editarNombreV19").value=r.cliente["Nombre Cliente"]||"";
+    document.getElementById("editarClasificacionV19").value=r.cliente.Clasificacion||"";
+    document.getElementById("filaReemplazoV19").classList.toggle("oculto",sesion.rol!=="Cobrador");
+    document.getElementById("reemplazarMedidorV19").checked=false;configurarReemplazoV19();
+    document.getElementById("avisoEditorMedidor").textContent=(sesion.rol==="Cobrador"?
+      "Puedes corregir nombre y clasificación. La lectura solo se modifica al cambiar a otro medidor, indicando su lectura inicial. ":
+      "Puedes corregir nombre, clasificación, medidor y lectura. ")+"No se borran saldos ni documentos anteriores. Los pendientes capturados antes del cambio pueden requerir revisión. No se liquida consumo no registrado de un medidor retirado.";
     document.getElementById("motivoEdicionMedidor").value="";document.getElementById("errorEdicionMedidor").textContent="";
-    document.getElementById(contextoEditorMedidor.regresarA).classList.add("oculto");
-    document.getElementById("pantallaEdicionMedidor").classList.remove("oculto");
-  }catch(e){alert(e.message||"No se pudo abrir el editor.");}finally{gestionMedidorEnCurso=false;}
+    document.getElementById(contextoEditorMedidor.regresarA).classList.add("oculto");document.getElementById("pantallaEdicionMedidor").classList.remove("oculto");
+    const lista=document.getElementById("clasificacionesEditorV19");lista.replaceChildren();
+    try{const opciones=await llamarBackend("clasificacionesPorZona",{zona:ref.zona});
+      if(contextoEditorMedidor?.revision!==r.revision||sesion.token!==identidad.token)return;
+      if(Array.isArray(opciones))opciones.forEach(v=>{const op=document.createElement("option");op.value=String(v);lista.appendChild(op);});
+    }catch(e){console.warn("Catálogo no disponible; puedes escribir la clasificación",e);}
+  }catch(e){alert(e.message||"No se pudo abrir la edición.");}finally{gestionMedidorEnCurso=false;}
 }
 function cerrarEditorMedidor() {
   if(gestionMedidorEnCurso)return;
@@ -4998,30 +4832,34 @@ function cerrarEditorMedidor() {
   document.getElementById(contextoEditorMedidor?.regresarA||"pantallaPrincipal").classList.remove("oculto");
   contextoEditorMedidor=null;programarSincronizacionOffline();
 }
-async function guardarEdicionMedidor() {
+async function guardarEdicionMedidor(){
   if(!contextoEditorMedidor||gestionMedidorEnCurso||sesionBloqueada)return;
-  const contexto=contextoEditorMedidor,error=document.getElementById("errorEdicionMedidor");error.textContent="";
-  if(!navigator.onLine){error.textContent="Necesitas conexión.";return;}
-  if(sesion.token!==contexto.identidad.token||sesion.usuario!==contexto.identidad.usuario){error.textContent="La sesión cambió. Consulta nuevamente.";return;}
-  const medidor=document.getElementById("editarNumeroMedidor").value.trim(),texto=document.getElementById("editarLecturaAnterior").value.trim();
-  const lecturaAnterior=Number(texto),motivo=document.getElementById("motivoEdicionMedidor").value.trim(),cobrador=sesion.rol==="Cobrador";
-  if(!medidor||!texto||!Number.isFinite(lecturaAnterior)||lecturaAnterior<0||!motivo){error.textContent="Completa medidor, lectura no negativa y motivo.";return;}
-  if(cobrador&&medidor===String(contexto.cliente["Medidor"]||"").trim()){error.textContent="Ingresa un medidor distinto.";return;}
-  if(!confirm("¿Guardar el cambio de "+contexto.cliente["CODIGO"]+"?\nMedidor: "+medidor+"\nLectura anterior nueva: "+lecturaAnterior+
-    "\n\n"+(cobrador?"Confirmas el reemplazo físico.\n":"")+"Los pendientes se conservan. No se liquidará automáticamente consumo del medidor retirado."))return;
-  const idCambio=generarIdCobroOffline(),pantalla=document.getElementById("pantallaEdicionMedidor"),boton=document.getElementById("botonGuardarMedidor");
-  gestionMedidorEnCurso=true;pantalla.inert=true;boton.textContent="Guardando...";let confirmado=false;
-  try {
-    const r=await llamarBackend("actualizarMedidorCliente",{codigo:contexto.cliente["CODIGO"],zona:contexto.cliente["Zona"],
-      medidor,lecturaAnterior,motivo,revision:contexto.revision,confirmarReemplazo:cobrador,idCambio});
-    if(!r?.exito||!r.cliente)throw new Error(r?.mensaje||"No se confirmó el cambio.");
-    confirmado=true;aplicarClienteActualizadoLocal(r.cliente);alert("Cambio confirmado. Medidor: "+medidor+" · Lectura anterior: "+lecturaAnterior);
-    pantalla.classList.add("oculto");contextoEditorMedidor=null;
-    if(contexto.regresarA==="pantallaDetalle"){gestionMedidorEnCurso=false;await abrirDetalleCliente(r.cliente,true);}
-    else document.getElementById("pantallaPrincipal").classList.remove("oculto");
-  }catch(e){console.error("Cambio medidor",{idCambio,error:e});error.textContent=confirmado?"Cambio confirmado; vuelve a consultar el cliente, no lo repitas.":
-      "No se pudo confirmar: "+(e.message||"Error de conexión.")+" Consulta cliente y CambiosMedidor antes de repetir. ID: "+idCambio;alert(error.textContent);}
-  finally{gestionMedidorEnCurso=false;pantalla.inert=false;boton.textContent="Guardar cambio";programarSincronizacionOffline();}
+  const ctx=contextoEditorMedidor,error=document.getElementById("errorEdicionMedidor");error.textContent="";
+  if(!navigator.onLine){error.textContent="Necesitas conexión para guardar la corrección.";return;}
+  if(sesion.token!==ctx.identidad.token||sesion.usuario!==ctx.identidad.usuario){error.textContent="La sesión cambió. Consulta nuevamente.";return;}
+  const nombreCliente=document.getElementById("editarNombreV19").value.trim(),clasificacion=document.getElementById("editarClasificacionV19").value.trim();
+  const medidor=document.getElementById("editarNumeroMedidor").value.trim(),texto=document.getElementById("editarLecturaAnterior").value.trim(),lecturaAnterior=Number(texto);
+  const motivo=document.getElementById("motivoEdicionMedidor").value.trim(),cobrador=sesion.rol==="Cobrador";
+  const cambioMedidor=medidor!==String(ctx.cliente.Medidor||"").trim();
+  if(!nombreCliente||!clasificacion||!texto||!Number.isFinite(lecturaAnterior)||lecturaAnterior<0||!motivo){error.textContent="Completa nombre, clasificación, lectura válida y motivo.";return;}
+  if(cobrador&&!cambioMedidor&&lecturaAnterior!==Number(ctx.cliente["Lectura Anterior"]||0)){error.textContent="No puedes corregir la lectura del mismo medidor.";return;}
+  if(cobrador&&cambioMedidor&&!document.getElementById("reemplazarMedidorV19").checked){error.textContent="Confirma el reemplazo del medidor.";return;}
+  if(cambioMedidor&&!medidor){error.textContent="Indica el número del medidor instalado.";return;}
+  if(!confirm("¿Guardar los datos de "+ctx.cliente.CODIGO+"?\nNombre: "+nombreCliente+"\nClasificación: "+clasificacion+"\nMedidor: "+(medidor||"Sin medidor")+
+    "\nLectura: "+lecturaAnterior+"\n\n"+(cobrador&&cambioMedidor?"Confirmas el cambio físico del medidor.\n":"")+"Los saldos e históricos se conservan."))return;
+  const idCambio=generarIdCobroOffline(),panel=document.getElementById("pantallaEdicionMedidor"),boton=document.getElementById("botonGuardarMedidor");
+  gestionMedidorEnCurso=true;panel.inert=true;boton.textContent="Guardando...";let confirmado=false;
+  try{
+    const r=await llamarBackend("actualizarDatosCliente",{codigo:ctx.cliente.CODIGO,zona:ctx.cliente.Zona,nombreCliente,clasificacion,medidor,lecturaAnterior,
+      motivo,idCambio,revision:ctx.revision,confirmarReemplazo:cobrador&&cambioMedidor});
+    if(!r?.exito||!r.cliente)throw new Error(r?.mensaje||"No se confirmó la corrección.");
+    confirmado=true;aplicarClienteActualizadoLocal(r.cliente);alert("Datos actualizados."+(r.advertencias?.length?"\n"+r.advertencias.join("\n"):""));
+    panel.classList.add("oculto");contextoEditorMedidor=null;
+    if(ctx.regresarA==="pantallaDetalle"){gestionMedidorEnCurso=false;await abrirDetalleCliente(r.cliente,true);}
+    else{document.getElementById("pantallaPrincipal").classList.remove("oculto");await cargarResumenClasV18();}
+  }catch(e){console.error("Corrección de cliente",{idCambio,error:e});error.textContent=confirmado?
+    "El cambio ya fue confirmado; actualiza la consulta, no lo repitas.":"No se confirmó: "+(e.message||"Error de conexión")+". Consulta el cliente y CambiosMedidor antes de repetir. ID: "+idCambio;alert(error.textContent);}
+  finally{gestionMedidorEnCurso=false;panel.inert=false;boton.textContent="Guardar cambio";programarSincronizacionOffline();}
 }
 function textoTramosFacturas(tramos) {
   return (tramos||[]).map(t=>t.inicio===t.fin?String(t.inicio):t.inicio+"–"+t.fin).join(", ")||"Ninguno";
@@ -5054,7 +4892,7 @@ async function retirarFacturasSobrantes(item,zona) {
   finally{gestionFacturasEnCurso=false;pantalla.inert=false;}
 }
 async function actualizarTalonarioTrasConexion() {
-  if(sesion.rol!=="Cobrador"||sesionBloqueada||!navigator.onLine||sincronizacionEnCurso||guardandoCobroLocal||gestionMedidorEnCurso||actualizandoFactura)return;
+  if(!esOperadorCobroV19()||sesionBloqueada||!navigator.onLine||sincronizacionEnCurso||guardandoCobroLocal||gestionMedidorEnCurso||actualizandoFactura)return;
   try{await obtenerFacturasDisponiblesSeguras();await asegurarFacturaActual();}catch(e){console.error("No se actualizó el talonario",e);}
 }
 window.addEventListener("online",actualizarTalonarioTrasConexion);
@@ -5220,6 +5058,69 @@ async function guardarPreciosV18(){
   finally{operacionPreciosV18=false;panel.inert=false;}
 }
 
+
+function esOperadorCobroV19(){return sesion.rol==="Cobrador"||(sesion.rol==="Administrador"&&sesion.modoCobroV19===true);}
+function zonaTrabajoCobroV19(){return String(sesion.rol==="Administrador"?(sesion.zonaTrabajo||sesion.zona||""):(sesion.zona||"")).trim();}
+async function iniciarCobranzaAdminV19(){
+  if(sesion.rol!=="Administrador"||guardandoCobroLocal||sincronizacionEnCurso||gestionMedidorEnCurso||gestionFacturasEnCurso||reservandoInspectoresV18)return;
+  let zona=document.getElementById("zonaConsultaGeneral").value||sesion.zonaTrabajo||"";
+  if(!zona)zona=prompt("Zona de cobranza: Santa Ana, Ahuachapan o Sonsonate","");
+  if(zona===null)return;zona=String(zona).trim();
+  if(!["Santa Ana","Ahuachapan","Sonsonate"].includes(zona)){alert("Selecciona una zona concreta para cobrar.");return;}
+  if(sesion.idParejaSesion&&sesion.zonaTrabajo&&sesion.zonaTrabajo!==zona){alert("La pareja de esta sesión pertenece a otra zona. Cierra sesión antes de cambiar la zona de cobranza. Los pendientes se conservan.");return;}
+  sesion.modoCobroV19=true;sesion.zonaTrabajo=zona;sesion.zona=zona;
+  document.getElementById("zonaConsultaGeneral").value=zona;
+  sesion.seleccionFacturaPendienteV18=!sesion.facturaActual;
+  localStorage.setItem("sesionApp",JSON.stringify(sesion));await mostrarPantallaPrincipal();
+}
+function salirCobranzaAdminV19(){
+  if(sesion.rol!=="Administrador"||guardandoCobroLocal||sincronizacionEnCurso||actualizandoFactura)return;
+  sesion.modoCobroV19=false;localStorage.setItem("sesionApp",JSON.stringify(sesion));
+  alert("Modo administración. La pareja sigue vinculada mientras esta sesión permanezca activa; no se han borrado pendientes.");
+  mostrarPantallaPrincipal();
+}
+function referenciaClienteV19(cliente){
+  const codigo=String(cliente?.CODIGO??"").trim(),zona=String(cliente?.Zona||"").trim();
+  if(!codigo)throw new Error("La tarjeta no contiene CODIGO. Consulta nuevamente la clasificación.");
+  if(!zona)throw new Error("La tarjeta no contiene Zona. No se elegirá una zona arbitraria.");
+  if(sesion.rol!=="Administrador"&&zona!==String(sesion.zona||"").trim())throw new Error("El cliente pertenece a otra zona.");
+  return {codigo,zona};
+}
+function configurarReemplazoV19(){
+  if(!contextoEditorMedidor)return;
+  const cobrador=sesion.rol==="Cobrador",c=contextoEditorMedidor.cliente,cambia=cobrador&&document.getElementById("reemplazarMedidorV19").checked;
+  document.getElementById("editarNumeroMedidor").readOnly=cobrador&&!cambia;
+  document.getElementById("editarLecturaAnterior").readOnly=cobrador&&!cambia;
+  document.getElementById("editarNumeroMedidor").value=cambia?"":String(c.Medidor||"");
+  document.getElementById("editarLecturaAnterior").value=cambia?"0":String(c["Lectura Anterior"]||0);
+  document.getElementById("etiquetaLecturaEditor").textContent=cambia?"Lectura inicial del nuevo medidor":"Lectura anterior";
+}
+function datosConsumoV19(cliente,estado,campos){
+  if(estado==="Notificacion")return {};
+  if(!["Cobro Total","Cobro Parcial"].includes(estado))throw new Error("Selecciona un estado válido.");
+  const datos={};let base;
+  if(cliente.Medidor){
+    const texto=String(campos.lecturaActual??"").trim(),actual=Number(texto),anterior=Number(cliente["Lectura Anterior"]||0);
+    if(!texto||!Number.isFinite(actual)||actual<anterior)throw new Error("La lectura actual debe ser válida y no menor a la anterior.");
+    datos.lecturaActual=texto;base=actual-anterior+Number(cliente["Pte/KWH Meses Anteri."]||0);
+  }else{
+    const texto=String(campos.kwManual??"").trim(),kw=Number(texto);
+    if(!texto||!Number.isFinite(kw)||kw<=0)throw new Error("Indica el total de kWh manuales a cobrar.");
+    datos.kwManual=texto;datos.montoFijo=texto;base=kw;
+  }
+  if(!Number.isFinite(base)||base<0)throw new Error("El consumo base requiere revisión.");
+  if(estado==="Cobro Parcial"){
+    const texto=String(campos.kwCobrado??"").trim(),kw=Number(texto);
+    if(!texto||!Number.isFinite(kw)||kw<=0||kw>base)throw new Error("El parcial debe ser positivo y no superar los kWh por cobrar.");
+    datos.kwCobrado=texto;
+  }
+  return datos;
+}
+
+function continuarSinFacturaV19(){
+  if(!esOperadorCobroV19()||!sesion.idParejaSesion){alert("Confirma inspectores primero.");return;}
+  sesion.facturaActual=null;sesion.seleccionFacturaPendienteV18=false;guardarSesionYContinuar();
+}
 </script>
 
 </body>
