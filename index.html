@@ -416,18 +416,63 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     <div class="error" id="errorLogin"></div>
   </div>
 
-  <!-- PASO 2: elegir los dos inspectores (solo si aplica) -->
+    <!-- PASO 2: elegir los dos inspectores (solo si aplica) -->
   <div id="pasoInspector" class="oculto">
     <h2>¿Quiénes van a cobrar?</h2>
+
     <select id="listaInspector1"></select>
     <select id="listaInspector2"></select>
-    <button onclick="confirmarInspector()">Continuar</button>
+
+    <button
+      type="button"
+      onclick="confirmarInspector()"
+    >
+      Continuar
+    </button>
+
     <div class="error" id="errorInspector"></div>
   </div>
 
-   <!-- PASO 3: factura inicial -->
+  <!-- PASO 3: factura inicial -->
   <div id="pasoFactura" class="oculto">
-</div>
+    <h2>¿Con qué factura inician?</h2>
+
+    <select id="campoFacturaInicial"></select>
+
+    <button
+      type="button"
+      id="botonContinuarFactura"
+      onclick="confirmarFacturaInicial()"
+      disabled
+    >
+      Continuar
+    </button>
+
+    <button
+      type="button"
+      onclick="cargarFacturasInicio()"
+    >
+      Actualizar facturas
+    </button>
+
+    <button
+      type="button"
+      id="botonCerrarSesionFactura"
+      class="botonCerrarSesion"
+      onclick="cerrarSesionDesdeFactura()"
+    >
+      Cerrar sesión
+    </button>
+
+    <div
+      class="error"
+      id="errorFactura"
+      role="status"
+    ></div>
+  </div>
+
+</div> <!-- Cierre del contenedor .caja -->
+
 
 <!-- PANTALLA PRINCIPAL -->
 <div id="pantallaPrincipal" class="oculto">
@@ -1372,6 +1417,28 @@ async function cargarFacturasInicio() {
   const select = document.getElementById("campoFacturaInicial");
   const info = document.getElementById("errorFactura");
   const boton = document.getElementById("botonContinuarFactura");
+  const salir = document.getElementById("botonCerrarSesionFactura");
+
+  const faltantes = [];
+
+  if (!select) faltantes.push("campoFacturaInicial");
+  if (!info) faltantes.push("errorFactura");
+  if (!boton) faltantes.push("botonContinuarFactura");
+  if (!salir) faltantes.push("botonCerrarSesionFactura");
+
+  if (faltantes.length) {
+    console.error("HTML de selección de factura incompleto", {
+      faltantes: faltantes
+    });
+
+    alert(
+      "Faltan elementos en el HTML de facturas:\n" +
+      faltantes.join("\n") +
+      "\n\nRevisa el bloque pasoFactura."
+    );
+
+    return;
+  }
 
   select.replaceChildren();
   boton.disabled = true;
@@ -1410,10 +1477,9 @@ async function cargarFacturasInicio() {
     info.textContent =
       "No se pudo verificar la disponibilidad: " +
       (error.message || "Error de consulta.") +
-      " Puedes reintentar o cerrar sesión.";
+      " Puedes actualizar facturas o cerrar sesión.";
   }
 }
-
 
 async function confirmarFacturaInicial() {
   const select = document.getElementById("campoFacturaInicial");
