@@ -1,36 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<!-- HTML v19 COMPLETO, ENTREGADO EN DOS PARTES CONSECUTIVAS
-Pegar TODO Parte 1 y debajo TODO Parte 2. Guardar el resultado unido como index.html.
-No agregar otra cabecera, otro script ni etiquetas de cierre entre partes.<!DOCTYPE html>
-<html lang="es">
-<head>
-<!-- HTML v19 COMPLETO, ENTREGADO EN DOS PARTES CONSECUTIVAS
-Pegar TODO Parte 1 y debajo TODO Parte 2. Guardar el resultado unido como index.html.
-No agregar otra cabecera, otro script ni etiquetas de cierre entre partes.
-Requiere Codigo.gs v19 y SesionesPermisos.gs v19 coordinados. NO publicar con el POST v18.
-Nuevas acciones: consultarDatosCliente, actualizarDatosCliente. desactivarCliente debe recibir zona.
-Facturas en cobranza: facturasDisponibles con paraCobro:true y zona concreta debe devolver
-solo las del usuario autenticado mediante consultarFacturasParaCobro(s.usuario,p.zona).
-reservarInspectores debe aceptar Administrador y pasar p.zona como cuarto argumento.
-Login/verificarSesion deben devolver zonaTrabajo en la metadata, y el reemplazo de sesiones
-conservar la pareja y zona de Cobrador Y Administrador sin liberar el token nuevo.
-Cobranza Admin es un modo explicito; mantiene actor propio y facturas propias asignadas.
-Notificacion no requiere factura, kWh, lectura ni precios. Fotos y observaciones siguen obligatorias.
-Fotos: Total=factura; Parcial=factura+notificacion; Notificacion=notificacion, con/sin medidor.
-Cobrador: nombre/clasificacion; lectura solo al reemplazar medidor por otro numero.
-Contador/Supervisor pueden editar lectura y desactivar; borrar no elimina historial.
-Cambio manual de factura no exige utilizar primero la menor. No se cambian ni borran pendientes.
-Si falla la consulta de disponibilidad, solo se usa un paquete propio de igual usuario/zona/pareja,
-rotulado copia local. Una denegacion de permisos o sesion invalida NO activa esa alternativa.
-Los importes/lecturas ocultos se ignoran al Notificar. No se imputan nuevos consumos no leidos.
-No borrar localStorage/IndexedDB. Pendientes anteriores mantienen sus IDs y versiones originales.
-Al cambiar nombre/clasificacion pueden requerir revision; no se atribuyen automaticamente al nuevo nombre.
-ConfigurarVersion19 en el servidor solo cuando el conjunto este completo, respetando respaldos.
-Pruebas locales: 37 comprobaciones de logica con DOM/backend simulados. Sintaxis Node verificada.
-NO equivale a pruebas en Vercel, Apps Script ni dispositivos reales. Probar camara/galeria en telefonos.
--->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>App de Cobros</title>
