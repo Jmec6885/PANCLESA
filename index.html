@@ -3304,22 +3304,91 @@ let clienteActual = null;
 let listaPrecios = [];
 
 async function obtenerListaPrecios() {
-  let p=obtenerPaqueteOffline();const paquetePropio=p&&p.usuario===sesion.usuario&&p.zona===sesion.zona;
-  if(navigator.onLine) {
+  const p = obtenerPaqueteOffline();
+
+  const paquetePropio =
+    p &&
+    p.usuario === sesion.usuario &&
+    p.zona === sesion.zona;
+
+  if (navigator.onLine) {
     try {
-      const r=await llamarBackend("precios",{});
-      if(!Array.isArray(r)||!r.length||!r[0].versionTarifa||r.some(x=>x.versionTarifa!==r[0].versionTarifa))
-        throw new Error("El servidor debe devolver una tarifa versionada v18. No captures con precios sin versión.");
-      listaPrecios=r;localStorage.setItem("listaPrecios",JSON.stringify(r));
-      if(paquetePropio){p.precios=r;p.versionTarifa=r[0].versionTarifa;localStorage.setItem(CLAVE_PAQUETE_OFFLINE,JSON.stringify(p));}
+      const r = await llamarBackend("precios", {});
+
+      // Mostrar el error real del servidor.
+      if (!Array.isArray(r)) {
+        throw new Error(
+          r?.mensaje ||
+          "La consulta de precios no devolvió una lista válida."
+        );
+      }
+
+      if (r.length === 0) {
+        throw new Error(
+          "El servidor devolvió una lista de precios vacía."
+        );
+      }
+
+      const version = r[0]?.versionTarifa;
+
+      if (
+        !version ||
+        r.some(x => !x || x.versionTarifa !== version)
+      ) {
+        throw new Error(
+          "Los precios recibidos no tienen una versión " +
+          "de tarifa uniforme."
+        );
+      }
+
+      listaPrecios = r;
+
+      localStorage.setItem(
+        "listaPrecios",
+        JSON.stringify(r)
+      );
+
+      if (paquetePropio) {
+        p.precios = r;
+        p.versionTarifa = version;
+
+        localStorage.setItem(
+          CLAVE_PAQUETE_OFFLINE,
+          JSON.stringify(p)
+        );
+      }
+
       return listaPrecios;
-    } catch(e) {
-      if(!paquetePropio||!p.precios?.[0]?.versionTarifa)throw e;
-      console.warn("Se usa la tarifa original del paquete por fallo de consulta; su versión se conservará en el cobro.",e);
+
+    } catch (e) {
+      if (
+        !paquetePropio ||
+        !p.precios?.[0]?.versionTarifa
+      ) {
+        throw e;
+      }
+
+      console.warn(
+        "Se usa la tarifa original del paquete por fallo " +
+        "de consulta; su versión se conservará en el cobro.",
+        e
+      );
     }
   }
-  if(!paquetePropio||!p.precios?.length||!p.precios[0].versionTarifa)throw new Error("Prepara los precios versionados en línea antes de trabajar sin conexión.");
-  listaPrecios=p.precios;return listaPrecios;
+
+  if (
+    !paquetePropio ||
+    !p.precios?.length ||
+    !p.precios[0]?.versionTarifa
+  ) {
+    throw new Error(
+      "Prepara los precios versionados en línea " +
+      "antes de trabajar sin conexión."
+    );
+  }
+
+  listaPrecios = p.precios;
+  return listaPrecios;
 }
 
 let mensajeBusquedaPrecioV20 = "";
