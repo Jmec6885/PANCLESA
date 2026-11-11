@@ -623,7 +623,12 @@ button:disabled{background:#94a3b8!important;cursor:default;}
       <button type="button" class="botonVolver" onclick="volverClasificaciones()">← Volver a clasificaciones</button>
       <h3 id="tituloClasificacion"></h3>
       <div class="fila" id="avisoDetalleClasificacion"></div>
-      <input type="text" id="campoBuscar" placeholder="Buscar por código o nombre..." oninput="filtrarClientes()">
+      <input
+  type="text"
+  id="campoBuscar"
+  placeholder="Buscar por código, nombre o medidor..."
+  oninput="filtrarClientes()"
+>
       <div id="cargandoCobros" class="mensajeCentro oculto">Cargando clientes...</div>
       <div id="listaClientes"></div>
     </div>
@@ -3190,10 +3195,21 @@ function filtrarClientes() {
   const contenedor = document.getElementById("listaClientes");
   contenedor.textContent = "";
   const lista = Array.isArray(clientesCargados) ? clientesCargados : [];
-  const clientes = texto ? lista.filter(c =>
-    String(c["CODIGO"] || "").toLowerCase().includes(texto) ||
-    String(c["Nombre Cliente"] || "").toLowerCase().includes(texto)
-  ) : lista;
+  const clientes = texto
+  ? lista.filter(c =>
+      String(c["CODIGO"] ?? "")
+        .toLowerCase()
+        .includes(texto) ||
+
+      String(c["Nombre Cliente"] ?? "")
+        .toLowerCase()
+        .includes(texto) ||
+
+      String(c["Medidor"] ?? "")
+        .toLowerCase()
+        .includes(texto)
+    )
+  : lista;
   if (!clientes.length) {
     const aviso = document.createElement("div");
     aviso.className = "mensajeCentro";
