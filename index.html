@@ -3322,9 +3322,45 @@ async function obtenerListaPrecios() {
   listaPrecios=p.precios;return listaPrecios;
 }
 
+let mensajeBusquedaPrecioV20 = "";
+
 function buscarMontoPorConsumo(consumoTotal) {
-  const fila = listaPrecios.find(p => Number(p.Consumo) === Number(consumoTotal));
-  return fila ? Number(fila.Monto) : null;
+  mensajeBusquedaPrecioV20 = "";
+
+  if (!Array.isArray(listaPrecios) || listaPrecios.length === 0) {
+    mensajeBusquedaPrecioV20 =
+      "Precios no disponibles. Revisa el aviso de precios.";
+    return null;
+  }
+
+  const consumo = Number(consumoTotal);
+
+  if (!Number.isFinite(consumo) || consumo < 0) {
+    mensajeBusquedaPrecioV20 =
+      "Ingresa una cantidad válida de kWh.";
+    return null;
+  }
+
+  const fila = listaPrecios.find(
+    p => Number(p.Consumo) === consumo
+  );
+
+  if (!fila) {
+    mensajeBusquedaPrecioV20 =
+      "No hay tarifa para " + consumo + " kWh.";
+    return null;
+  }
+
+  const textoMonto = String(fila.Monto ?? "").trim();
+  const monto = Number(textoMonto);
+
+  if (!textoMonto || !Number.isFinite(monto) || monto < 0) {
+    mensajeBusquedaPrecioV20 =
+      "El monto de la tarifa no es válido.";
+    return null;
+  }
+
+  return monto;
 }
 
 async function abrirDetalleCliente(cliente, verificado = false) {
@@ -3413,7 +3449,9 @@ function calcularConsumo() {
 
   if (consumo > 0) {
     const monto = buscarMontoPorConsumo(consumoTotal);
-    document.getElementById("detTotalCobrar").value = monto !== null ? ("$" + monto.toFixed(2)) : "No encontrado en tabla Precios";
+    document.getElementById("detTotalCobrar").value = monto !== null
+  ? monto.toFixed(2)
+  : mensajeBusquedaPrecioV20;
   } else {
     document.getElementById("detTotalCobrar").value = "";
   }
@@ -3450,8 +3488,8 @@ function calcularTotalSinMedidor() {
   const monto = buscarMontoPorConsumo(kw);
 
   total.value = monto !== null
-    ? "$" + monto.toFixed(2)
-    : "No encontrado en tabla Precios";
+  ? monto.toFixed(2)
+  : mensajeBusquedaPrecioV20;
 
   actualizarKwPendienteParcial();
 }
@@ -3467,7 +3505,9 @@ function actualizarKwPendienteParcial() {
   document.getElementById("detKwPendienteNuevo").textContent = pendienteNuevo > 0 ? pendienteNuevo.toFixed(2) : "0";
 
   const montoParcial = buscarMontoPorConsumo(kwCobrado);
-  document.getElementById("detMontoParcial").textContent = montoParcial !== null ? ("$" + montoParcial.toFixed(2)) : "No encontrado en tabla Precios";
+  document.getElementById("detMontoParcial").textContent = montoParcial !== null
+  ? montoParcial.toFixed(2)
+  : mensajeBusquedaPrecioV20;
 }
 
 function actualizarCamposPorEstado() {
