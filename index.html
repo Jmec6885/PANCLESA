@@ -30,7 +30,7 @@ NO equivale a pruebas en Vercel, Apps Script ni dispositivos reales. Probar cama
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>App de Cobros</title>
 <!-- Requiere el conjunto v19 completo; no borrar almacenamiento local. -->
-<!-- VERSION_APP: v19-integrada -->
+<!-- VERSION_APP: v22-monto-manual; sin pruebas reales. Comentarios de pruebas v19 son históricos. -->
 <style>
   body {
     font-family: Arial, sans-serif;
@@ -480,7 +480,7 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     <span id="textoSesion"></span>
     <button onclick="cerrarSesion()" class="botonCerrarSesion">Cerrar sesión</button>
   </div>
-  <div style="text-align:right; font-size:10px; color:#aaa;">v19-integrada</div>
+  <div style="text-align:right; font-size:10px; color:#aaa;">v22-monto-manual</div>
   <div class="barraAcciones" id="barraAcciones">
 
   <button
@@ -906,6 +906,19 @@ button:disabled{background:#94a3b8!important;cursor:default;}
     disabled
   ></div>
 
+
+  <div id="bloqueManualV22" class="oculto">
+    <div class="fila">Consumo mayor de 1000 kWh: introduce el total autorizado, no solo el excedente.</div>
+    <label class="etiquetaCampo" for="detTotalManualV22">Monto total manual ($)</label>
+    <input type="number" id="detTotalManualV22" min="0.01" step="0.01" inputmode="decimal" oninput="v22ActualizarImportes()">
+    <div id="bloqueParcialManualV22" class="oculto">
+      <label class="etiquetaCampo" for="detParcialManualV22">Monto a cobrar hoy por el parcial ($)</label>
+      <input type="number" id="detParcialManualV22" min="0.01" step="0.01" inputmode="decimal" oninput="v22ActualizarImportes()">
+    </div>
+    <label class="etiquetaCampo" for="detMotivoManualV22">Motivo / referencia del importe autorizado</label>
+    <input type="text" id="detMotivoManualV22" maxlength="500" oninput="v22ActualizarImportes()">
+    <div id="avisoManualV22" class="fila" role="status"></div>
+  </div>
   <div id="avisoPreciosV19" class="fila" role="status"></div>
   <div id="avisoNotificacionV19" class="fila oculto">Notificación sin cobro: no necesitas lectura, kWh ni importe. Se conservan lectura y deuda conocidas. Adjunta la foto de notificación y observaciones.</div>
   <button type="button" id="botonCambiarFacturaDetalleV19" class="botonActualizar" onclick="cambiarFacturaInicial()">Cambiar factura antes de guardar</button>
@@ -2106,6 +2119,11 @@ async function crearPendienteDesdeFormulario(
     versionCola: 2,
     idCobro: datos.idCobro,
     versionTarifa: datos.versionTarifa,
+    modoImporte: datos.modoImporte,
+    totalManual: datos.totalManual,
+    parcialManual: datos.parcialManual,
+    motivoImporteManual: datos.motivoImporteManual,
+    ajusteImporteV22: datos.ajusteImporteV22,
     idParejaSesion: datos.idParejaSesion,
     estado: "PENDIENTE",
     creadoEn: datos.fechaCaptura,
@@ -2248,6 +2266,13 @@ if (item.ultimoError) {
   tarjeta.appendChild(aviso);
 }
 
+      if (v22PendienteCorregible(item)) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = "Completar monto manual (>1000 kWh)";
+        b.onclick = () => v22CorregirPendiente(item.idCobro);
+        tarjeta.appendChild(b);
+      }
       lista.appendChild(tarjeta);
     });
 
@@ -3479,6 +3504,7 @@ if (guardandoCobroLocal || sincronizacionEnCurso) {
     alert("El cliente no pertenece a la zona de cobranza activa. Vuelve a administración para seleccionar otra zona.");return;
   }
   clienteActual = cliente;
+  v22ReiniciarManual();
 document.getElementById("detFotoFactura").value = "";
 document.getElementById("detFotoNotificacion").value = "";
 mostrarFotoElegida("detFotoFactura");
@@ -3548,6 +3574,7 @@ function calcularConsumo() {
   }
 
   actualizarKwPendienteParcial();
+  v22ActualizarImportes();
 }
 
 function validarLecturaActual() {
@@ -3583,6 +3610,7 @@ function calcularTotalSinMedidor() {
   : mensajeBusquedaPrecioV20;
 
   actualizarKwPendienteParcial();
+  v22ActualizarImportes();
 }
 
 function actualizarKwPendienteParcial() {
@@ -3599,6 +3627,7 @@ function actualizarKwPendienteParcial() {
   document.getElementById("detMontoParcial").textContent = montoParcial !== null
   ? montoParcial.toFixed(2)
   : mensajeBusquedaPrecioV20;
+  v22ActualizarImportes();
 }
 
 function actualizarCamposPorEstado() {
@@ -3616,6 +3645,7 @@ function actualizarCamposPorEstado() {
   for(const id of ["detLecturaActual","detMontoFijo","detKwCobrado"])document.getElementById(id).disabled=notifica;
   document.getElementById("detNumeroFactura").value=notifica?"":(sesion.facturaActual||"Sin factura seleccionada");
   document.getElementById("detKwCobrado").oninput=actualizarKwPendienteParcial;
+  v22ActualizarImportes();
 }
 
 function cerrarDetalle() {
@@ -3771,6 +3801,11 @@ function datosDesdePendiente(p) {
   return {
     idCobro: p.idCobro,
     versionTarifa: p.versionTarifa,
+    modoImporte: p.modoImporte,
+    totalManual: p.totalManual,
+    parcialManual: p.parcialManual,
+    motivoImporteManual: p.motivoImporteManual,
+    ajusteImporteV22: p.ajusteImporteV22,
     idParejaSesion: p.idParejaSesion,
     inspector1: p.inspector1,
     inspector2: p.inspector2,
@@ -4189,6 +4224,7 @@ inspector2,
       kwManual:document.getElementById("detMontoFijo").value,
       kwCobrado:document.getElementById("detKwCobrado").value
     }));
+    Object.assign(datos, v22DatosFormulario(estado));
     const ubicacion = await obtenerUbicacionActual();
 
     if (ubicacion.disponible) {
@@ -5504,6 +5540,162 @@ function datosConsumoV19(cliente,estado,campos){
 function continuarSinFacturaV19(){
   if(!esOperadorCobroV19()||!sesion.idParejaSesion){alert("Confirma inspectores primero.");return;}
   sesion.facturaActual=null;sesion.seleccionFacturaPendienteV18=false;guardarSesionYContinuar();
+}
+
+// V22: importes excepcionales; los consumos se validan/calculan antes de llamar.
+function v22ImporteManual(valor, etiqueta) {
+  const texto = String(valor ?? "").trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(texto)) throw new Error(etiqueta + ": indica un importe positivo con hasta dos decimales, sin separadores de miles.");
+  const n = Number(texto);
+  if (!Number.isFinite(n) || n <= 0 || !Number.isSafeInteger(Math.round(n * 100))) throw new Error(etiqueta + ": importe fuera de rango.");
+  return n;
+}
+function v22ResolverImportes(consumoTotal, kwPagados, estado, precios, datos) {
+  if (!Number.isFinite(consumoTotal) || consumoTotal < 0) throw new Error("Consumo total inválido.");
+  if (!["Cobro Total", "Cobro Parcial"].includes(estado)) throw new Error("Estado inválido para calcular importes.");
+  const manual = consumoTotal > 1000;
+  const modo = String(datos.modoImporte || "TABLA");
+  if (manual && modo !== "MANUAL_MAYOR_1000") throw new Error("Consumo mayor de 1000 kWh: completa el monto manual en el formulario o en Pendientes.");
+  if (!manual && modo !== "TABLA") throw new Error("El monto manual solo se permite para consumos mayores de 1000 kWh.");
+  const precio = kw => {
+    if (kw === 0) return 0;
+    const f = precios.find(p => Number(p.Consumo) === kw);
+    if (!f) throw new Error("No existe precio para " + kw + " kWh.");
+    const n = Number(f.Monto);
+    if (String(f.Monto ?? "").trim() === "" || !Number.isFinite(n) || n < 0) throw new Error("Precio inválido para " + kw + " kWh.");
+    return n;
+  };
+  const motivo = manual ? String(datos.motivoImporteManual || "").trim() : "";
+  if (manual && (!motivo || motivo.length > 500 || /[\r\n]/.test(motivo))) throw new Error("Indica un motivo o referencia del monto manual (una línea, máximo 500 caracteres).");
+  const total = manual ? v22ImporteManual(datos.totalManual, "Monto total manual") : precio(consumoTotal);
+  const kw = estado === "Cobro Total" ? consumoTotal : Number(kwPagados);
+  if (estado === "Cobro Parcial" && (!Number.isFinite(kw) || kw <= 0 || kw > consumoTotal)) throw new Error("Los kWh del parcial deben ser positivos y no superar el total.");
+  const cobrado = estado === "Cobro Total" ? total : (manual && kw > 1000 ? v22ImporteManual(datos.parcialManual, "Monto parcial manual") : precio(kw));
+  if (cobrado > total) throw new Error("El importe cobrado no puede superar el importe total.");
+  return {total, cobrado, kw, pendiente:Math.max(0,consumoTotal-kw), modo:manual?"MANUAL_MAYOR_1000":"TABLA", motivo};
+}
+
+let v22UltimoConsumo = null;
+let v22UltimoParcial = null;
+function v22ReiniciarManual() {
+  v22UltimoConsumo = null; v22UltimoParcial = null;
+  for (const id of ["detTotalManualV22","detParcialManualV22","detMotivoManualV22"]) document.getElementById(id).value = "";
+}
+function v22ConsumoFormulario() {
+  if (!clienteActual) return NaN;
+  if (!clienteActual.Medidor) {
+    const t=document.getElementById("detMontoFijo").value.trim();
+    return t ? Number(t) : NaN;
+  }
+  const t=document.getElementById("detLecturaActual").value.trim();
+  const a=Number(clienteActual["Lectura Anterior"]||0), b=Number(t);
+  if (!t || !Number.isFinite(b) || b<a) return NaN;
+  return b-a+Number(clienteActual["Pte/KWH Meses Anteri."]||0);
+}
+function v22CamposManual() {
+  return {modoImporte:"MANUAL_MAYOR_1000", totalManual:document.getElementById("detTotalManualV22").value,
+    parcialManual:document.getElementById("detParcialManualV22").value,
+    motivoImporteManual:document.getElementById("detMotivoManualV22").value.trim()};
+}
+function v22ActualizarImportes() {
+  const estado=document.getElementById("detEstado").value;
+  const total=v22ConsumoFormulario(), kw=Number(document.getElementById("detKwCobrado").value);
+  const manual=estado!=="Notificacion" && Number.isFinite(total) && total>1000;
+  document.getElementById("bloqueManualV22").classList.toggle("oculto", !manual);
+  document.getElementById("bloqueParcialManualV22").classList.toggle("oculto", !manual || estado!=="Cobro Parcial" || !(kw>1000));
+  if (v22UltimoConsumo!==total && !(Number.isNaN(v22UltimoConsumo)&&Number.isNaN(total))) {
+    for (const id of ["detTotalManualV22","detParcialManualV22"]) document.getElementById(id).value="";
+    v22UltimoConsumo=total;
+  }
+  if (v22UltimoParcial!==kw) {document.getElementById("detParcialManualV22").value="";v22UltimoParcial=kw;}
+  document.getElementById("avisoManualV22").textContent="";
+  if (!manual) return;
+  try {
+    const campos=v22CamposManual();
+    const n=v22ImporteManual(campos.totalManual,"Monto total manual");
+    document.getElementById("detTotalCobrar").value=n.toFixed(2);
+    if(estado==="Cobro Parcial") {
+      const r=v22ResolverImportes(total,kw,estado,listaPrecios,campos);
+      document.getElementById("detMontoParcial").textContent=r.cobrado.toFixed(2);
+    }
+  } catch(e) {
+    document.getElementById("avisoManualV22").textContent=e.message;
+    if(!document.getElementById("detTotalManualV22").value) document.getElementById("detTotalCobrar").value="Ingrese el monto manual";
+    if(estado==="Cobro Parcial")document.getElementById("detMontoParcial").textContent="Complete y revise los importes";
+  }
+}
+function v22DatosFormulario(estado) {
+  if(estado==="Notificacion")return {};
+  const total=v22ConsumoFormulario();
+  const datos=total>1000?v22CamposManual():{modoImporte:"TABLA"};
+  v22ResolverImportes(total,document.getElementById("detKwCobrado").value,estado,listaPrecios,datos);
+  return datos;
+}
+function v22ConsumoPendiente(p) {
+  if(!p.baseMedidor)return NaN;
+  if(String(p.baseMedidor.medidor??"").trim()) {
+    const t=String(p.lecturaActual??"").trim(), n=Number(t), a=Number(p.baseMedidor.lecturaAnterior);
+    if(!t||!Number.isFinite(n)||!Number.isFinite(a)||n<a)return NaN;
+    return n-a+Number(p.baseMedidor.pteAnterior||0);
+  }
+  const t=String(p.kwManual??"").trim();return t?Number(t):NaN;
+}
+function v22PendienteCorregible(p) {
+  return p.versionCola===2 && p.estado==="REVISION" && ["Cobro Total","Cobro Parcial"].includes(p.estadoCobro) &&
+    /No existe precio para|Consumo mayor de 1000 kWh/i.test(String(p.ultimoError||"")) && v22ConsumoPendiente(p)>1000;
+}
+function v22ExportarRespaldo(p) {
+  const blob=new Blob([JSON.stringify(p,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="respaldo-cobro-"+p.idCobro+".json";
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+async function v22CorregirPendiente(id) {
+  if(guardandoCobroLocal||sincronizacionEnCurso||sesionBloqueada)return;
+  if(!navigator.onLine||!navigator.locks){alert("Necesitas conexión y un navegador con bloqueo entre pestañas para corregir el pendiente.");return;}
+  const identidad={usuario:sesion.usuario,zona:sesion.zona,token:sesion.token};
+  const verificar=()=>{if(sesionBloqueada||sesion.usuario!==identidad.usuario||sesion.zona!==identidad.zona||sesion.token!==identidad.token)throw new Error("La sesión cambió; no se modificó el pendiente.");};
+  guardandoCobroLocal=true;
+  try {
+    await navigator.locks.request("cobros-sincronizacion-v2",{ifAvailable:true},async lock=>{
+      if(!lock)throw new Error("Otra pestaña está trabajando; espera.");
+      verificar();
+      const p=(await obtenerPendientesOffline()).find(x=>x.idCobro===id);
+      verificar();
+      if(!p||!v22PendienteCorregible(p))throw new Error("Este pendiente no admite la corrección automática de monto.");
+      const consulta=await llamarBackend("consultarCobro",{idCobro:id});
+      verificar();
+      if(consulta?.exito!==true||consulta.encontrado!==false)throw new Error(consulta?.mensaje||"El ID ya existe o no se pudo comprobar; requiere conciliación. No se modificó.");
+      const total=v22ConsumoPendiente(p);
+      const entrada=prompt("Factura "+p.numeroFactura+" · "+total+" kWh.\nMonto TOTAL autorizado ($), no tarifa por kWh ni solo excedente:",p.totalManual||"");
+      if(entrada===null)return;
+      const monto=v22ImporteManual(entrada,"Monto total manual");
+      let parcial="";
+      if(p.estadoCobro==="Cobro Parcial"&&Number(p.kwCobrado)>1000){
+        parcial=prompt("Monto autorizado a cobrar HOY por "+p.kwCobrado+" kWh ($):",p.parcialManual||"");
+        if(parcial===null)return;
+        v22ImporteManual(parcial,"Monto parcial manual");
+      }
+      const motivo=prompt("Motivo / referencia del importe autorizado (máximo 500 caracteres):",p.motivoImporteManual||"");
+      if(motivo===null)return;
+      if(!motivo.trim()||motivo.length>500||/[\r\n]/.test(motivo))throw new Error("Referencia inválida.");
+      if(p.estadoCobro==="Cobro Parcial"&&(!(Number(p.kwCobrado)>0)||Number(p.kwCobrado)>total))throw new Error("Los kWh parciales requieren revisión.");
+      if(parcial&&Number(parcial)>monto)throw new Error("El parcial supera el total.");
+      const textoPago=p.estadoCobro==="Cobro Total"?"Cobro total: $"+monto.toFixed(2):(parcial?"Cobro parcial: $"+Number(parcial).toFixed(2):"Cobro parcial: se validará con la tarifa ORIGINAL para "+p.kwCobrado+" kWh.");
+      if(!confirm("Factura "+p.numeroFactura+" · "+p.nombreCliente+"\nTotal: $"+monto.toFixed(2)+"\n"+textoPago+"\nReferencia: "+motivo.trim()+"\n\nSe conservarán ID, fotos, fecha, lecturas e inspectores. Se solicitará un respaldo JSON local. ¿Guardar la corrección?"))return;
+      verificar();
+      // Reconsultar antes de habilitar el reenvío; el backend vuelve a controlar el ID bajo bloqueo.
+      const segunda=await llamarBackend("consultarCobro",{idCobro:id});
+      verificar();
+      if(segunda?.exito!==true||segunda.encontrado!==false)throw new Error("El estado del servidor cambió; no se modificó el pendiente.");
+      v22ExportarRespaldo(p);
+      const corregido=Object.assign({},p,{modoImporte:"MANUAL_MAYOR_1000",totalManual:entrada.trim(),parcialManual:parcial.trim(),motivoImporteManual:motivo.trim(),
+        ajusteImporteV22:{fecha:new Date().toISOString(),usuario:identidad.usuario,errorAnterior:p.ultimoError,estadoAnterior:p.estado},estado:"PENDIENTE",ultimoError:""});
+      await actualizarRegistroOffline(corregido);
+      alert("Monto guardado en el mismo pendiente. No se ha confirmado el cobro: pulsa Sincronizar ahora y revisa el resultado. Conserva el respaldo JSON en privado; contiene datos y fotos.");
+    });
+  } catch(e){alert(e.message||"No se pudo corregir; revisa el pendiente antes de repetir.");}
+  finally {guardandoCobroLocal=false;await abrirPendientesOffline();}
 }
 </script>
 
