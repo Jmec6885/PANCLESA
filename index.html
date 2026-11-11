@@ -3236,6 +3236,12 @@ function filtrarClientes() {
     }
     linea("codigo", "", cliente["CODIGO"]);
     linea("nombre", "", cliente["Nombre Cliente"]);
+linea(
+  "fila",
+  "Dirección: ",
+  String(cliente["DIRECCION"] ?? "").trim() ||
+    "Sin dirección registrada"
+);
     linea("fila", "Medidor:", cliente["Medidor"] || "Sin medidor (cuota fija)");
     linea("fila", "Lectura anterior:", cliente["Lectura Anterior"]);
     linea("fila", "Observación:", cliente["OBSERVACIONES"] || "-");
