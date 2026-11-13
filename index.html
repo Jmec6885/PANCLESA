@@ -3664,26 +3664,171 @@ function leerArchivoBase64(input) {
 
 function comprimirImagen(archivo) {
   return new Promise((resolve, reject) => {
+    if (!archivo || !archivo.size) {
+      reject(new Error(
+        "La imagen está vacía o no está disponible. " +
+        "Guárdala en el teléfono y selecciónala nuevamente."
+      ));
+      return;
+    }
+
     const lector = new FileReader();
-    lector.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const maxAncho = 1280;
-        const escala = Math.min(1, maxAncho / img.width);
-        const canvas = document.createElement("canvas");
-        canvas.width = img.width * escala;
-        canvas.height = img.height * escala;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", 0.7));
-      };
-      img.onerror = reject;
-      img.src = e.target.result;
+    let imagen = null;
+    let terminado = false;
+
+    const temporizador = setTimeout(() => {
+      fallar(
+        "Se agotó el tiempo al preparar la foto. " +
+        "Comprueba que esté guardada en el teléfono."
+      );
+
+      if (lector.readyState === FileReader.LOADING) {
+        lector.abort();
+      }
+    }, 30000);
+
+    function limpiar() {
+      clearTimeout(temporizador);
+
+      lector.onload = null;
+      lector.onerror = null;
+      lector.onabort = null;
+
+      if (imagen) {
+        imagen.onload = null;
+        imagen.onerror = null;
+      }
+    }
+
+    function fallar(mensaje, causa) {
+      if (terminado) return;
+      terminado = true;
+
+      console.error("PREPARAR_FOTO", {
+        nombre: archivo.name,
+        tipo: archivo.type || "No informado",
+        bytes: archivo.size,
+        mensaje,
+        causa: causa?.message || causa?.name || ""
+      });
+
+      limpiar();
+      reject(new Error(mensaje));
+    }
+
+    lector.onerror = () => {
+      const detalle = lector.error?.name || "Error de lectura";
+
+      fallar(
+        "No se pudo leer la foto de la galería (" +
+        detalle + "). Guarda una copia local y vuelve a elegirla.",
+        lector.error
+      );
     };
-    lector.onerror = reject;
-    lector.readAsDataURL(archivo);
+
+    lector.onabort = () => {
+      fallar("La lectura de la foto fue interrumpida.");
+    };
+
+    lector.onload = () => {
+      if (terminado) return;
+
+      try {
+        const contenido = lector.result;
+
+        if (
+          typeof contenido !== "string" ||
+          !contenido.startsWith("data:")
+        ) {
+          throw new Error("El archivo no produjo datos válidos.");
+        }
+
+        imagen = new Image();
+
+        imagen.onerror = () => {
+          fallar(
+            "El navegador no pudo abrir esta imagen. " +
+            "Prueba una copia exportada como JPG o PNG."
+          );
+        };
+
+        imagen.onload = () => {
+          if (terminado) return;
+
+          try {
+            const ancho = imagen.naturalWidth;
+            const alto = imagen.naturalHeight;
+
+            if (!ancho || !alto) {
+              throw new Error("La imagen no tiene dimensiones válidas.");
+            }
+
+            const escala = Math.min(1, 1280 / Math.max(ancho, alto));
+            const canvas = document.createElement("canvas");
+
+            canvas.width = Math.max(1, Math.round(ancho * escala));
+            canvas.height = Math.max(1, Math.round(alto * escala));
+
+            const contexto = canvas.getContext("2d");
+
+            if (!contexto) {
+              throw new Error("No se pudo crear el procesador de imagen.");
+            }
+
+            contexto.fillStyle = "#ffffff";
+            contexto.fillRect(0, 0, canvas.width, canvas.height);
+
+            contexto.drawImage(
+              imagen,
+              0,
+              0,
+              canvas.width,
+              canvas.height
+            );
+
+            const resultado = canvas.toDataURL("image/jpeg", 0.7);
+
+            if (!resultado.startsWith("data:image/jpeg;base64,")) {
+              throw new Error("No se pudo convertir la foto a JPG.");
+            }
+
+            terminado = true;
+            limpiar();
+            resolve(resultado);
+
+          } catch (error) {
+            fallar(
+              "No se pudo convertir la foto: " +
+              (error?.message || String(error)),
+              error
+            );
+          }
+        };
+
+        imagen.src = contenido;
+
+      } catch (error) {
+        fallar(
+          "No se pudo preparar el archivo: " +
+          (error?.message || String(error)),
+          error
+        );
+      }
+    };
+
+    try {
+      lector.readAsDataURL(archivo);
+
+    } catch (error) {
+      fallar(
+        "No se pudo iniciar la lectura de la foto: " +
+        (error?.message || String(error)),
+        error
+      );
+    }
   });
 }
+
 
 function obtenerUbicacionActual() {
   return new Promise(resolve => {
